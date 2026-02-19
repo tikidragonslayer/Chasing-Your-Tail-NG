@@ -227,7 +227,8 @@ def step_kismet_config(cfg):
     api["password"] = ask("Kismet password (Enter to skip)", api.get("password", ""))
 
     paths = cfg.setdefault("paths", {})
-    default_db = f"/Users/{os.environ.get('USER', 'mistergoodbond')}/*.kismet"
+    home = os.path.expanduser("~")
+    default_db = f"{home}/*.kismet"
     paths["kismet_logs"] = ask("Kismet .kismet DB path (glob)", paths.get("kismet_logs", default_db))
     ok("Kismet config saved")
 

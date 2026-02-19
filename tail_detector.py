@@ -13,6 +13,7 @@ from secure_database import SecureKismetDB
 import csv
 import threading
 import time
+import platform
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timedelta
 from email.mime.text import MIMEText
@@ -192,9 +193,21 @@ class TailDetector:
 
     # ─── Kismet DB ────────────────────────────
     def _get_kismet_files(self, hours: Optional[int] = None) -> list[str]:
-        files = glob.glob(self.kismet_glob)
+        # Try configured path first
+        pattern = self.config["paths"]["kismet_logs"]
+        if pattern.startswith("~"):
+            pattern = os.path.expanduser(pattern)
+            
+        files = glob.glob(pattern)
+        
+        # Fallback 1: Home directory
         if not files:
             files = glob.glob(os.path.join(str(Path.home()), "*.kismet"))
+            
+        # Fallback 2: Linux standard path
+        if not files and platform.system() == "Linux":
+            files = glob.glob("/var/lib/kismet/*.kismet")
+            
         if hours is not None:
             cutoff = datetime.now() - timedelta(hours=hours)
             files = [f for f in files

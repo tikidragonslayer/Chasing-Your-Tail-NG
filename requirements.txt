@@ -15,3 +15,6 @@ resend>=2.0.0
 
 # Twilio SMS
 twilio>=9.0.0
+
+# System Stats (CPU/Memory/Temp)
+psutil>=5.9.0

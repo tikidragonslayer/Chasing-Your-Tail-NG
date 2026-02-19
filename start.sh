@@ -63,7 +63,7 @@ case "$MODE" in
     echo -e "   Press Ctrl+C to stop."
     echo ""
     # Open browser after short delay (macOS)
-    (sleep 1.5 && open "http://localhost:8888") &
+    (sleep 1.5 && $(which xdg-open || echo open) "http://localhost:8888") &
     python3 web_ui.py
     ;;
 esac

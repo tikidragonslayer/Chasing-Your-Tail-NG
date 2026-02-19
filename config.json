@@ -2,7 +2,7 @@
   "paths": {
     "base_dir": ".",
     "log_dir": "logs",
-    "kismet_logs": "/Users/mistergoodbond/*.kismet",
+    "kismet_logs": "~/*.kismet",
     "whitelist": "data/home_whitelist.json",
     "roam_log": "data/roam_sessions.json",
     "alerts_log": "data/alerts.log",

@@ -8,6 +8,8 @@ import os
 import queue
 import threading
 import time
+import platform
+import psutil
 from datetime import datetime
 from flask import Flask, jsonify, render_template, request, Response, stream_with_context
 from flask_cors import CORS
@@ -323,6 +325,34 @@ def api_add_checkpoint():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+@app.route("/api/sys_stats")
+def api_sys_stats():
+    """Return system health metrics (CPU, RAM, Disk, Temp)."""
+    try:
+        cpu = psutil.cpu_percent(interval=None)
+        memory = psutil.virtual_memory().percent
+        disk = psutil.disk_usage("/").percent
+        
+        # Temperature (RPi/Linux specific)
+        temp = None
+        if hasattr(psutil, "sensors_temperatures"):
+            temps = psutil.sensors_temperatures()
+            if "cpu_thermal" in temps:
+                temp = temps["cpu_thermal"][0].current
+            elif "coretemp" in temps:
+                temp = temps["coretemp"][0].current
+        
+        return jsonify({
+            "cpu": cpu,
+            "memory": memory,
+            "disk": disk,
+            "temp": temp,
+            "platform": platform.system(),
+            "node": platform.node()
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/create_launcher", methods=["POST"])
 def api_create_launcher():

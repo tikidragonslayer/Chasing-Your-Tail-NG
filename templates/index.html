@@ -1,388 +1,1091 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SentinelWatch</title>
-<style>
-  :root{--bg:#050508;--glass:rgba(255,255,255,0.04);--glass2:rgba(255,255,255,0.08);--border:rgba(255,255,255,0.1);--red:#ff3b30;--orange:#ff9f0a;--green:#30d158;--blue:#0a84ff;--teal:#5ac8fa;--text:#f2f2f7;--muted:#8e8e93;--r:16px}
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',system-ui,sans-serif;min-height:100vh;overflow-x:hidden}
-  body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 80% 60% at 20% 10%,rgba(10,132,255,.08) 0%,transparent 60%),radial-gradient(ellipse 60% 50% at 80% 80%,rgba(255,59,48,.06) 0%,transparent 60%);pointer-events:none;z-index:0}
-  .glass{background:var(--glass);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border:1px solid var(--border);border-radius:var(--r)}
-  /* ─── NAV ─── */
-  nav{position:sticky;top:0;z-index:100;padding:0 24px;height:60px;display:flex;align-items:center;justify-content:space-between;background:rgba(5,5,8,.8);backdrop-filter:blur(20px);border-bottom:1px solid var(--border)}
-  .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;letter-spacing:.5px}
-  .logo-shield{font-size:22px}
-  .status-bar{display:flex;align-items:center;gap:18px;font-size:12px;color:var(--muted)}
-  .dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px}
-  .dot-green{background:var(--green);box-shadow:0 0 8px var(--green)}
-  .dot-red{background:var(--red);box-shadow:0 0 8px var(--red)}
-  .dot-orange{background:var(--orange);box-shadow:0 0 8px var(--orange)}
-  .mode-btns{display:flex;gap:6px}
-  .mode-btn{padding:5px 14px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;cursor:pointer;transition:all .2s}
-  .mode-btn:hover,.mode-btn.active{background:var(--blue);border-color:var(--blue);color:#fff;box-shadow:0 0 16px rgba(10,132,255,.4)}
-  .mode-btn.active-home{background:var(--green);border-color:var(--green);color:#fff;box-shadow:0 0 16px rgba(48,209,88,.4)}
-  .mode-btn.active-roam{background:var(--orange);border-color:var(--orange);color:#fff;box-shadow:0 0 16px rgba(255,159,10,.4)}
-  .mode-btn.active-doorbell{background:var(--teal);border-color:var(--teal);color:#fff}
-  .mode-btn.active-watchlist{background:var(--red);border-color:var(--red);color:#fff;box-shadow:0 0 16px rgba(255,59,48,.4)}
-  /* ─── LAYOUT ─── */
-  .main{display:grid;grid-template-columns:1fr 340px;grid-template-rows:auto 1fr;gap:16px;padding:16px;max-width:1600px;margin:0 auto}
-  /* ─── CARDS ─── */
-  .card{padding:20px;position:relative;overflow:hidden}
-  .card-title{font-size:11px;font-weight:600;letter-spacing:1.2px;color:var(--muted);text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:8px}
-  /* ─── ALERTS ─── */
-  #alerts-feed{display:flex;flex-direction:column;gap:6px;height:320px;overflow-y:auto;scroll-behavior:smooth}
-  #alerts-feed::-webkit-scrollbar{width:3px}
-  #alerts-feed::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-  .alert-item{padding:10px 14px;border-radius:10px;font-size:12px;line-height:1.5;border-left:3px solid transparent;animation:slideIn .3s ease}
-  @keyframes slideIn{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
-  .alert-CRITICAL{background:rgba(255,59,48,.12);border-color:var(--red);color:#ff8d8a}
-  .alert-WARNING{background:rgba(255,159,10,.1);border-color:var(--orange);color:#ffcc66}
-  .alert-INFO{background:rgba(10,132,255,.08);border-color:rgba(10,132,255,.4);color:#6aafff}
-  .alert-time{font-size:10px;opacity:.5;margin-top:3px}
-  /* ─── POI CARDS ─── */
-  .poi-list{display:flex;flex-direction:column;gap:10px;max-height:320px;overflow-y:auto}
-  .poi-card{padding:14px 16px;border-radius:12px;background:var(--glass2);border:1px solid var(--border);cursor:pointer;transition:all .2s;position:relative}
-  .poi-card:hover{border-color:rgba(255,255,255,.2);transform:translateY(-1px);box-shadow:0 8px 32px rgba(0,0,0,.4)}
-  .poi-rank{position:absolute;top:12px;right:14px;font-size:10px;font-weight:700;color:var(--muted);background:rgba(255,255,255,.06);padding:2px 8px;border-radius:10px}
-  .poi-mac{font-size:13px;font-weight:600;font-family:'SF Mono',Monaco,monospace}
-  .poi-meta{font-size:11px;color:var(--muted);margin-top:4px;display:flex;gap:12px;flex-wrap:wrap}
-  .badge{padding:2px 8px;border-radius:8px;font-size:10px;font-weight:600}
-  .badge-red{background:rgba(255,59,48,.2);color:var(--red)}
-  .badge-orange{background:rgba(255,159,10,.2);color:var(--orange)}
-  .badge-green{background:rgba(48,209,88,.2);color:var(--green)}
-  .badge-gray{background:rgba(142,142,147,.15);color:var(--muted)}
-  .badge-teal{background:rgba(90,200,250,.15);color:var(--teal)}
-  .trend-up{color:var(--red)}
-  .trend-down{color:var(--green)}
-  .trend-stable{color:var(--muted)}
-  /* ─── DEVICE TABLE ─── */
-  .device-table-wrap{overflow-x:auto}
-  table{width:100%;border-collapse:collapse;font-size:12px}
-  th{padding:8px 12px;text-align:left;color:var(--muted);font-weight:600;font-size:11px;letter-spacing:.5px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg)}
-  td{padding:9px 12px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle}
-  tr:hover td{background:rgba(255,255,255,.03)}
-  .mono{font-family:'SF Mono',Monaco,monospace;font-size:11px}
-  /* ─── EXPAND PANEL ─── */
-  .expand-panel{display:none;padding:14px;background:rgba(0,0,0,.3);border-top:1px solid var(--border);animation:fadeIn .2s ease}
-  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-  .expand-panel.open{display:block}
-  .form-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px}
-  input,select,textarea{background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 12px;font-size:12px;outline:none;transition:border-color .2s}
-  input:focus,select:focus,textarea:focus{border-color:var(--blue)}
-  select option{background:#1c1c1e}
-  textarea{resize:vertical;min-height:60px;width:100%}
-  .btn{padding:7px 16px;border-radius:20px;border:none;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s}
-  .btn-blue{background:var(--blue);color:#fff}
-  .btn-blue:hover{box-shadow:0 0 16px rgba(10,132,255,.5);transform:translateY(-1px)}
-  .btn-red{background:rgba(255,59,48,.2);color:var(--red);border:1px solid rgba(255,59,48,.3)}
-  .btn-red:hover{background:var(--red);color:#fff}
-  .btn-sm{padding:4px 12px;font-size:11px}
-  /* ─── SEARCH ─── */
-  .table-header{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
-  #search{flex:1;min-width:180px}
-  #filter-group{min-width:130px}
-  /* ─── SETUP WIZARD ─── */
-  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);z-index:500;display:flex;align-items:center;justify-content:center;animation:fadeIn .3s}
-  .modal{max-width:560px;width:95%;padding:32px;position:relative}
-  .modal-close{position:absolute;top:16px;right:16px;background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer}
-  .wizard-step{display:none}.wizard-step.active{display:block}
-  .wizard-title{font-size:20px;font-weight:700;margin-bottom:6px}
-  .wizard-sub{font-size:13px;color:var(--muted);margin-bottom:22px;line-height:1.5}
-  .wizard-field{margin-bottom:14px}
-  .wizard-field label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px;font-weight:600;letter-spacing:.5px}
-  .wizard-field input,.wizard-field select,.wizard-field textarea{width:100%}
-  .step-dots{display:flex;gap:6px;margin-bottom:24px}
-  .step-dot{width:6px;height:6px;border-radius:50%;background:var(--border);transition:all .3s}
-  .step-dot.done{background:var(--blue);box-shadow:0 0 8px var(--blue)}
-  .wizard-nav{display:flex;justify-content:space-between;margin-top:24px}
-  /* ─── NOTIFICATIONS CONFIG ─── */
-  .notif-toggle{display:flex;align-items:center;gap:10px;margin-bottom:12px}
-  .toggle{width:40px;height:22px;border-radius:11px;background:var(--border);position:relative;cursor:pointer;transition:background .3s}
-  .toggle.on{background:var(--green)}
-  .toggle::after{content:'';position:absolute;width:18px;height:18px;border-radius:50%;background:#fff;top:2px;left:2px;transition:left .3s}
-  .toggle.on::after{left:20px}
-  /* ─── MLT SECTION ─── */
-  .mlt-row{display:flex;gap:8px;margin-bottom:8px;padding:12px;border-radius:10px;background:var(--glass2);border:1px solid var(--border)}
-  .mlt-rank{font-size:18px;font-weight:800;color:var(--red);min-width:36px}
-  .mlt-info{flex:1}
-  .mlt-score{font-size:22px;font-weight:700;color:var(--orange)}
-  /* ─── WATCHLIST PANEL ─── */
-  .wl-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:rgba(255,59,48,.07);border:1px solid rgba(255,59,48,.15);margin-bottom:8px}
-  /* ─── STAT PILLS ─── */
-  .stats-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
-  .stat-pill{padding:8px 16px;border-radius:12px;background:var(--glass2);border:1px solid var(--border);min-width:100px;text-align:center}
-  .stat-n{font-size:24px;font-weight:700}
-  .stat-l{font-size:10px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-top:2px}
-  /* ─── SETUP BTN ─── */
-  #setup-btn{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:24px;background:var(--blue);color:#fff;border:none;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 8px 32px rgba(10,132,255,.4);z-index:200;transition:all .2s}
-  #setup-btn:hover{transform:translateY(-2px);box-shadow:0 12px 40px rgba(10,132,255,.55)}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SentinelWatch</title>
+  <style>
+    :root {
+      --bg: #050508;
+      --glass: rgba(255, 255, 255, 0.04);
+      --glass2: rgba(255, 255, 255, 0.08);
+      --border: rgba(255, 255, 255, 0.1);
+      --red: #ff3b30;
+      --orange: #ff9f0a;
+      --green: #30d158;
+      --blue: #0a84ff;
+      --teal: #5ac8fa;
+      --text: #f2f2f7;
+      --muted: #8e8e93;
+      --r: 16px
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 20% 10%, rgba(10, 132, 255, .08) 0%, transparent 60%), radial-gradient(ellipse 60% 50% at 80% 80%, rgba(255, 59, 48, .06) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0
+    }
+
+    .glass {
+      background: var(--glass);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      border: 1px solid var(--border);
+      border-radius: var(--r)
+    }
+
+    /* ─── NAV ─── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 0 24px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(5, 5, 8, .8);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border)
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 17px;
+      letter-spacing: .5px
+    }
+
+    .logo-shield {
+      font-size: 22px
+    }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      font-size: 12px;
+      color: var(--muted)
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 5px
+    }
+
+    .dot-green {
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green)
+    }
+
+    .dot-red {
+      background: var(--red);
+      box-shadow: 0 0 8px var(--red)
+    }
+
+    .dot-orange {
+      background: var(--orange);
+      box-shadow: 0 0 8px var(--orange)
+    }
+
+    .mode-btns {
+      display: flex;
+      gap: 6px
+    }
+
+    .mode-btn {
+      padding: 5px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all .2s
+    }
+
+    .mode-btn:hover,
+    .mode-btn.active {
+      background: var(--blue);
+      border-color: var(--blue);
+      color: #fff;
+      box-shadow: 0 0 16px rgba(10, 132, 255, .4)
+    }
+
+    .mode-btn.active-home {
+      background: var(--green);
+      border-color: var(--green);
+      color: #fff;
+      box-shadow: 0 0 16px rgba(48, 209, 88, .4)
+    }
+
+    .mode-btn.active-roam {
+      background: var(--orange);
+      border-color: var(--orange);
+      color: #fff;
+      box-shadow: 0 0 16px rgba(255, 159, 10, .4)
+    }
+
+    .mode-btn.active-doorbell {
+      background: var(--teal);
+      border-color: var(--teal);
+      color: #fff
+    }
+
+    .mode-btn.active-watchlist {
+      background: var(--red);
+      border-color: var(--red);
+      color: #fff;
+      box-shadow: 0 0 16px rgba(255, 59, 48, .4)
+    }
+
+    /* ─── LAYOUT ─── */
+    .main {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      grid-template-rows: auto 1fr;
+      gap: 16px;
+      padding: 16px;
+      max-width: 1600px;
+      margin: 0 auto
+    }
+
+    /* ─── CARDS ─── */
+    .card {
+      padding: 20px;
+      position: relative;
+      overflow: hidden
+    }
+
+    .card-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1.2px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px
+    }
+
+    /* ─── ALERTS ─── */
+    #alerts-feed {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      height: 320px;
+      overflow-y: auto;
+      scroll-behavior: smooth
+    }
+
+    #alerts-feed::-webkit-scrollbar {
+      width: 3px
+    }
+
+    #alerts-feed::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 2px
+    }
+
+    .alert-item {
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 12px;
+      line-height: 1.5;
+      border-left: 3px solid transparent;
+      animation: slideIn .3s ease
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateX(12px)
+      }
+
+      to {
+        opacity: 1;
+        transform: none
+      }
+    }
+
+    .alert-CRITICAL {
+      background: rgba(255, 59, 48, .12);
+      border-color: var(--red);
+      color: #ff8d8a
+    }
+
+    .alert-WARNING {
+      background: rgba(255, 159, 10, .1);
+      border-color: var(--orange);
+      color: #ffcc66
+    }
+
+    .alert-INFO {
+      background: rgba(10, 132, 255, .08);
+      border-color: rgba(10, 132, 255, .4);
+      color: #6aafff
+    }
+
+    .alert-time {
+      font-size: 10px;
+      opacity: .5;
+      margin-top: 3px
+    }
+
+    /* ─── POI CARDS ─── */
+    .poi-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 320px;
+      overflow-y: auto
+    }
+
+    .poi-card {
+      padding: 14px 16px;
+      border-radius: 12px;
+      background: var(--glass2);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all .2s;
+      position: relative
+    }
+
+    .poi-card:hover {
+      border-color: rgba(255, 255, 255, .2);
+      transform: translateY(-1px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, .4)
+    }
+
+    .poi-rank {
+      position: absolute;
+      top: 12px;
+      right: 14px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--muted);
+      background: rgba(255, 255, 255, .06);
+      padding: 2px 8px;
+      border-radius: 10px
+    }
+
+    .poi-mac {
+      font-size: 13px;
+      font-weight: 600;
+      font-family: 'SF Mono', Monaco, monospace
+    }
+
+    .poi-meta {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 4px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap
+    }
+
+    .badge {
+      padding: 2px 8px;
+      border-radius: 8px;
+      font-size: 10px;
+      font-weight: 600
+    }
+
+    .badge-red {
+      background: rgba(255, 59, 48, .2);
+      color: var(--red)
+    }
+
+    .badge-orange {
+      background: rgba(255, 159, 10, .2);
+      color: var(--orange)
+    }
+
+    .badge-green {
+      background: rgba(48, 209, 88, .2);
+      color: var(--green)
+    }
+
+    .badge-gray {
+      background: rgba(142, 142, 147, .15);
+      color: var(--muted)
+    }
+
+    .badge-teal {
+      background: rgba(90, 200, 250, .15);
+      color: var(--teal)
+    }
+
+    .trend-up {
+      color: var(--red)
+    }
+
+    .trend-down {
+      color: var(--green)
+    }
+
+    .trend-stable {
+      color: var(--muted)
+    }
+
+    /* ─── DEVICE TABLE ─── */
+    .device-table-wrap {
+      overflow-x: auto
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px
+    }
+
+    th {
+      padding: 8px 12px;
+      text-align: left;
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 11px;
+      letter-spacing: .5px;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: var(--bg)
+    }
+
+    td {
+      padding: 9px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, .04);
+      vertical-align: middle
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, .03)
+    }
+
+    .mono {
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 11px
+    }
+
+    /* ─── EXPAND PANEL ─── */
+    .expand-panel {
+      display: none;
+      padding: 14px;
+      background: rgba(0, 0, 0, .3);
+      border-top: 1px solid var(--border);
+      animation: fadeIn .2s ease
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0
+      }
+
+      to {
+        opacity: 1
+      }
+    }
+
+    .expand-panel.open {
+      display: block
+    }
+
+    .form-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      margin-bottom: 10px
+    }
+
+    input,
+    select,
+    textarea {
+      background: rgba(255, 255, 255, .06);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 7px 12px;
+      font-size: 12px;
+      outline: none;
+      transition: border-color .2s
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      border-color: var(--blue)
+    }
+
+    select option {
+      background: #1c1c1e
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 60px;
+      width: 100%
+    }
+
+    .btn {
+      padding: 7px 16px;
+      border-radius: 20px;
+      border: none;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .2s
+    }
+
+    .btn-blue {
+      background: var(--blue);
+      color: #fff
+    }
+
+    .btn-blue:hover {
+      box-shadow: 0 0 16px rgba(10, 132, 255, .5);
+      transform: translateY(-1px)
+    }
+
+    .btn-red {
+      background: rgba(255, 59, 48, .2);
+      color: var(--red);
+      border: 1px solid rgba(255, 59, 48, .3)
+    }
+
+    .btn-red:hover {
+      background: var(--red);
+      color: #fff
+    }
+
+    .btn-sm {
+      padding: 4px 12px;
+      font-size: 11px
+    }
+
+    /* ─── SEARCH ─── */
+    .table-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+      flex-wrap: wrap
+    }
+
+    #search {
+      flex: 1;
+      min-width: 180px
+    }
+
+    #filter-group {
+      min-width: 130px
+    }
+
+    /* ─── SETUP WIZARD ─── */
+    .modal-bg {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .7);
+      backdrop-filter: blur(8px);
+      z-index: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn .3s
+    }
+
+    .modal {
+      max-width: 560px;
+      width: 95%;
+      padding: 32px;
+      position: relative
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 20px;
+      cursor: pointer
+    }
+
+    .wizard-step {
+      display: none
+    }
+
+    .wizard-step.active {
+      display: block
+    }
+
+    .wizard-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 6px
+    }
+
+    .wizard-sub {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 22px;
+      line-height: 1.5
+    }
+
+    .wizard-field {
+      margin-bottom: 14px
+    }
+
+    .wizard-field label {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 5px;
+      font-weight: 600;
+      letter-spacing: .5px
+    }
+
+    .wizard-field input,
+    .wizard-field select,
+    .wizard-field textarea {
+      width: 100%
+    }
+
+    .step-dots {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 24px
+    }
+
+    .step-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--border);
+      transition: all .3s
+    }
+
+    .step-dot.done {
+      background: var(--blue);
+      box-shadow: 0 0 8px var(--blue)
+    }
+
+    .wizard-nav {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 24px
+    }
+
+    /* ─── NOTIFICATIONS CONFIG ─── */
+    .notif-toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px
+    }
+
+    .toggle {
+      width: 40px;
+      height: 22px;
+      border-radius: 11px;
+      background: var(--border);
+      position: relative;
+      cursor: pointer;
+      transition: background .3s
+    }
+
+    .toggle.on {
+      background: var(--green)
+    }
+
+    .toggle::after {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fff;
+      top: 2px;
+      left: 2px;
+      transition: left .3s
+    }
+
+    .toggle.on::after {
+      left: 20px
+    }
+
+    /* ─── MLT SECTION ─── */
+    .mlt-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+      padding: 12px;
+      border-radius: 10px;
+      background: var(--glass2);
+      border: 1px solid var(--border)
+    }
+
+    .mlt-rank {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--red);
+      min-width: 36px
+    }
+
+    .mlt-info {
+      flex: 1
+    }
+
+    .mlt-score {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--orange)
+    }
+
+    /* ─── WATCHLIST PANEL ─── */
+    .wl-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: rgba(255, 59, 48, .07);
+      border: 1px solid rgba(255, 59, 48, .15);
+      margin-bottom: 8px
+    }
+
+    /* ─── STAT PILLS ─── */
+    .stats-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 16px
+    }
+
+    .stat-pill {
+      padding: 8px 16px;
+      border-radius: 12px;
+      background: var(--glass2);
+      border: 1px solid var(--border);
+      min-width: 100px;
+      text-align: center
+    }
+
+    .stat-n {
+      font-size: 24px;
+      font-weight: 700
+    }
+
+    .stat-l {
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      margin-top: 2px
+    }
+
+    /* ─── SETUP BTN ─── */
+    #setup-btn {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 12px 20px;
+      border-radius: 24px;
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 8px 32px rgba(10, 132, 255, .4);
+      z-index: 200;
+      transition: all .2s
+    }
+
+    #setup-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 40px rgba(10, 132, 255, .55)
+    }
+  </style>
 </head>
+
 <body>
 
-<!-- NAV -->
-<nav>
-  <div class="logo"><span class="logo-shield">🛡</span> SentinelWatch</div>
-  <div class="status-bar">
-    <span id="kismet-status"><span class="dot dot-red"></span>Kismet: checking…</span>
-    <span id="mode-status">Mode: <b id="current-mode">IDLE</b></span>
-    <span id="dev-count">Devices: <b>—</b></span>
-    <span id="unk-count">Unknown: <b>—</b></span>
-  </div>
-  <div class="mode-btns">
-    <button class="mode-btn" data-mode="HOME">🏠 Home</button>
-    <button class="mode-btn" data-mode="ROAM">🚗 Roam</button>
-    <button class="mode-btn" data-mode="DOORBELL">🔔 Doorbell</button>
-    <button class="mode-btn" data-mode="WATCHLIST">👁 Watchlist</button>
-  </div>
-</nav>
-
-<!-- MAIN -->
-<div class="main">
-
-  <!-- LEFT COL -->
-  <div style="display:flex;flex-direction:column;gap:16px">
-
-    <!-- STATS ROW -->
-    <div class="stats-row" id="stats-row">
-      <div class="stat-pill"><div class="stat-n" id="s-total">—</div><div class="stat-l">Devices</div></div>
-      <div class="stat-pill"><div class="stat-n" id="s-unknown" style="color:var(--orange)">—</div><div class="stat-l">Unknown</div></div>
-      <div class="stat-pill"><div class="stat-n" id="s-watchlist" style="color:var(--red)">—</div><div class="stat-l">Watchlist</div></div>
-      <div class="stat-pill"><div class="stat-n" id="s-present" style="color:var(--green)">—</div><div class="stat-l">Present</div></div>
+  <!-- NAV -->
+  <nav>
+    <div class="logo"><span class="logo-shield">🛡</span> SentinelWatch</div>
+    <div class="status-bar">
+      <span id="kismet-status"><span class="dot dot-red"></span>Kismet: checking…</span>
+      <span id="mode-status">Mode: <b id="current-mode">IDLE</b></span>
+      <span id="dev-count">Devices: <b>—</b></span>
+      <span id="unk-count">Unknown: <b>—</b></span>
     </div>
-
-    <!-- PERSONS / TOP VISITORS -->
-    <div class="glass card" id="poi-section">
-      <div class="card-title">
-        <span id="poi-title">🚗 Persons of Interest</span>
-        <span class="badge badge-orange" id="poi-count">0</span>
-      </div>
-      <div class="poi-list" id="poi-list"></div>
+    <div class="mode-btns">
+      <button class="mode-btn" data-mode="HOME">🏠 Home</button>
+      <button class="mode-btn" data-mode="ROAM">🚗 Roam</button>
+      <button class="mode-btn" data-mode="DOORBELL">🔔 Doorbell</button>
+      <button class="mode-btn" data-mode="WATCHLIST">👁 Watchlist</button>
     </div>
+  </nav>
 
-    <!-- MULTI-LOCATION STALKER RANKING -->
-    <div class="glass card">
-      <div class="card-title">📍 Multi-Location Stalker Ranking
-        <span class="badge badge-red" id="mlt-count">0</span>
-        <button class="btn btn-blue btn-sm" onclick="refreshMLT()" style="margin-left:auto">Rescan</button>
-      </div>
-      <div id="mlt-list"><div style="color:var(--muted);font-size:12px">No multi-location suspects yet. Data builds as you roam.</div></div>
-    </div>
+  <!-- MAIN -->
+  <div class="main">
 
-    <!-- ALL DEVICES TABLE -->
-    <div class="glass card">
-      <div class="card-title">📋 All Devices</div>
-      <div class="table-header">
-        <input id="search" placeholder="Search MAC, label, manufacturer…" oninput="filterTable()">
-        <select id="filter-group" onchange="filterTable()">
-          <option value="">All Groups</option>
-          <option>family</option><option>friend</option><option>neighbor</option>
-          <option>work</option><option>unknown</option><option>watchlist</option><option>suspect</option>
-        </select>
-        <button class="btn btn-blue btn-sm" onclick="exportCSV()">⬇ CSV</button>
-        <button class="btn btn-blue btn-sm" onclick="exportJSON()">⬇ JSON</button>
-      </div>
-      <div class="device-table-wrap">
-        <table id="device-table">
-          <thead><tr>
-            <th>Label / MAC</th><th>Manufacturer</th><th>Group</th>
-            <th>Enc</th><th>Score</th><th>Signal</th><th>Trend</th>
-            <th>Modes</th><th>Last Seen</th><th>Actions</th>
-          </tr></thead>
-          <tbody id="device-tbody"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
+    <!-- LEFT COL -->
+    <div style="display:flex;flex-direction:column;gap:16px">
 
-  <!-- RIGHT COL -->
-  <div style="display:flex;flex-direction:column;gap:16px">
-
-    <!-- LIVE ALERTS -->
-    <div class="glass card" style="flex:1">
-      <div class="card-title">⚡ Live Alerts
-        <button class="btn btn-sm" style="margin-left:auto;background:rgba(255,255,255,.06);color:var(--muted)" onclick="document.getElementById('alerts-feed').innerHTML=''">Clear</button>
-      </div>
-      <div id="alerts-feed"></div>
-    </div>
-
-    <!-- WATCHLIST PANEL -->
-    <div class="glass card">
-      <div class="card-title">👁 Watchlist <span class="badge badge-red" id="wl-badge">0</span></div>
-      <div id="wl-list"></div>
-    </div>
-
-    <!-- NOTIFICATION CONFIG -->
-    <div class="glass card">
-      <div class="card-title">🔔 Notifications</div>
-      <div class="notif-toggle">
-        <div class="toggle" id="toggle-resend" onclick="toggleNotif('resend')"></div>
-        <div>
-          <div style="font-size:12px;font-weight:600">Resend.io Email</div>
-          <div id="resend-status" style="font-size:11px;color:var(--muted)">Disabled</div>
+      <!-- STATS ROW -->
+      <div class="stats-row" id="stats-row">
+        <div class="stat-pill">
+          <div class="stat-n" id="s-total">—</div>
+          <div class="stat-l">Devices</div>
+        </div>
+        <div class="stat-pill">
+          <div class="stat-n" id="s-unknown" style="color:var(--orange)">—</div>
+          <div class="stat-l">Unknown</div>
+        </div>
+        <div class="stat-pill">
+          <div class="stat-n" id="s-watchlist" style="color:var(--red)">—</div>
+          <div class="stat-l">Watchlist</div>
+        </div>
+        <div class="stat-pill">
+          <div class="stat-n" id="s-present" style="color:var(--green)">—</div>
+          <div class="stat-l">Present</div>
         </div>
       </div>
-      <div class="notif-toggle">
-        <div class="toggle" id="toggle-twilio" onclick="toggleNotif('twilio')"></div>
-        <div>
-          <div style="font-size:12px;font-weight:600">Twilio SMS</div>
-          <div id="twilio-status" style="font-size:11px;color:var(--muted)">Disabled</div>
+
+      <!-- PERSONS / TOP VISITORS -->
+      <div class="glass card" id="poi-section">
+        <div class="card-title">
+          <span id="poi-title">🚗 Persons of Interest</span>
+          <span class="badge badge-orange" id="poi-count">0</span>
+        </div>
+        <div class="poi-list" id="poi-list"></div>
+      </div>
+
+      <!-- MULTI-LOCATION STALKER RANKING -->
+      <div class="glass card">
+        <div class="card-title">📍 Multi-Location Stalker Ranking
+          <span class="badge badge-red" id="mlt-count">0</span>
+          <button class="btn btn-blue btn-sm" onclick="refreshMLT()" style="margin-left:auto">Rescan</button>
+        </div>
+        <div id="mlt-list">
+          <div style="color:var(--muted);font-size:12px">No multi-location suspects yet. Data builds as you roam.</div>
         </div>
       </div>
-      <div class="notif-toggle">
-        <div class="toggle" id="toggle-arrival" onclick="toggleNotifFlag('known_device_arrival_notify')"></div>
-        <div style="font-size:12px">Known device arrival alerts</div>
+
+      <!-- ALL DEVICES TABLE -->
+      <div class="glass card">
+        <div class="card-title">📋 All Devices</div>
+        <div class="table-header">
+          <input id="search" placeholder="Search MAC, label, manufacturer…" oninput="filterTable()">
+          <select id="filter-group" onchange="filterTable()">
+            <option value="">All Groups</option>
+            <option>family</option>
+            <option>friend</option>
+            <option>neighbor</option>
+            <option>work</option>
+            <option>unknown</option>
+            <option>watchlist</option>
+            <option>suspect</option>
+          </select>
+          <button class="btn btn-blue btn-sm" onclick="exportCSV()">⬇ CSV</button>
+          <button class="btn btn-blue btn-sm" onclick="exportJSON()">⬇ JSON</button>
+        </div>
+        <div class="device-table-wrap">
+          <table id="device-table">
+            <thead>
+              <tr>
+                <th>Label / MAC</th>
+                <th>Manufacturer</th>
+                <th>Group</th>
+                <th>Enc</th>
+                <th>Score</th>
+                <th>Signal</th>
+                <th>Trend</th>
+                <th>Modes</th>
+                <th>Last Seen</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="device-tbody"></tbody>
+          </table>
+        </div>
       </div>
-      <div class="notif-toggle">
-        <div class="toggle" id="toggle-linger" onclick="toggleNotifFlag('unknown_ssid_linger_notify')"></div>
-        <div style="font-size:12px">Unknown SSID linger alerts</div>
+      <!-- System Health Card -->
+      <div class="card glass">
+        <div class="card-header">
+          <h3 style="display:flex;align-items:center;gap:8px">🌡 System Health <span id="platform-badge"
+              style="font-size:0.7rem;background:var(--glass2);padding:2px 6px;border-radius:4px;color:var(--cyan)">Detecting...</span>
+          </h3>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-value" id="stat-cpu">0%</div>
+            <div class="stat-label">CPU Load</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="stat-mem">0%</div>
+            <div class="stat-label">RAM Usage</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="stat-temp">--°C</div>
+            <div class="stat-label">CPU Temp</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT COL -->
+    <div style="display:flex;flex-direction:column;gap:16px">
+
+      <!-- LIVE ALERTS -->
+      <div class="glass card" style="flex:1">
+        <div class="card-title">⚡ Live Alerts
+          <button class="btn btn-sm" style="margin-left:auto;background:rgba(255,255,255,.06);color:var(--muted)"
+            onclick="document.getElementById('alerts-feed').innerHTML=''">Clear</button>
+        </div>
+        <div id="alerts-feed"></div>
+      </div>
+
+      <!-- WATCHLIST PANEL -->
+      <div class="glass card">
+        <div class="card-title">👁 Watchlist <span class="badge badge-red" id="wl-badge">0</span></div>
+        <div id="wl-list"></div>
+      </div>
+
+      <!-- NOTIFICATION CONFIG -->
+      <div class="glass card">
+        <div class="card-title">🔔 Notifications</div>
+        <div class="notif-toggle">
+          <div class="toggle" id="toggle-resend" onclick="toggleNotif('resend')"></div>
+          <div>
+            <div style="font-size:12px;font-weight:600">Resend.io Email</div>
+            <div id="resend-status" style="font-size:11px;color:var(--muted)">Disabled</div>
+          </div>
+        </div>
+        <div class="notif-toggle">
+          <div class="toggle" id="toggle-twilio" onclick="toggleNotif('twilio')"></div>
+          <div>
+            <div style="font-size:12px;font-weight:600">Twilio SMS</div>
+            <div id="twilio-status" style="font-size:11px;color:var(--muted)">Disabled</div>
+          </div>
+        </div>
+        <div class="notif-toggle">
+          <div class="toggle" id="toggle-arrival" onclick="toggleNotifFlag('known_device_arrival_notify')"></div>
+          <div style="font-size:12px">Known device arrival alerts</div>
+        </div>
+        <div class="notif-toggle">
+          <div class="toggle" id="toggle-linger" onclick="toggleNotifFlag('unknown_ssid_linger_notify')"></div>
+          <div style="font-size:12px">Unknown SSID linger alerts</div>
+        </div>
       </div>
     </div>
   </div>
-</div>
 
-<!-- SETUP BTN -->
-<button id="setup-btn" onclick="openWizard()">⚙ Setup</button>
+  <!-- SETUP BTN -->
+  <button id="setup-btn" onclick="openWizard()">⚙ Setup</button>
 
-<!-- SETUP WIZARD MODAL -->
-<div class="modal-bg" id="wizard-modal" style="display:none">
-<div class="glass modal">
-  <button class="modal-close" onclick="closeWizard()">✕</button>
-  <div class="step-dots" id="step-dots"></div>
+  <!-- SETUP WIZARD MODAL -->
+  <div class="modal-bg" id="wizard-modal" style="display:none">
+    <div class="glass modal">
+      <button class="modal-close" onclick="closeWizard()">✕</button>
+      <div class="step-dots" id="step-dots"></div>
 
-  <!-- Step 1: Welcome -->
-  <div class="wizard-step active" id="step-1">
-    <div class="wizard-title">Welcome to SentinelWatch</div>
-    <div class="wizard-sub">Let's configure your system for macOS. This wizard checks Kismet, sets up notification channels, and saves your profile. Takes about 2 minutes.</div>
-    <div style="background:rgba(10,132,255,.08);border:1px solid rgba(10,132,255,.2);border-radius:12px;padding:14px;font-size:12px;color:#6aafff;line-height:1.6">
-      <b>macOS M1 Requirements:</b><br>
-      • Kismet via Homebrew: <code>brew install kismet</code><br>
-      • Python 3.11+: <code>brew install python@3.11</code><br>
-      • Run: <code>pip install -r requirements.txt</code>
+      <!-- Step 1: Welcome -->
+      <div class="wizard-step active" id="step-1">
+        <div class="wizard-title">Welcome to SentinelWatch</div>
+        <div class="wizard-sub">Let's configure your system for macOS. This wizard checks Kismet, sets up notification
+          channels, and saves your profile. Takes about 2 minutes.</div>
+        <div
+          style="background:rgba(10,132,255,.08);border:1px solid rgba(10,132,255,.2);border-radius:12px;padding:14px;font-size:12px;color:#6aafff;line-height:1.6">
+          <b>macOS M1 Requirements:</b><br>
+          • Kismet via Homebrew: <code>brew install kismet</code><br>
+          • Python 3.11+: <code>brew install python@3.11</code><br>
+          • Run: <code>pip install -r requirements.txt</code>
+        </div>
+        <div class="wizard-nav"><span></span><button class="btn btn-blue" onclick="nextStep()">Get Started →</button>
+        </div>
+      </div>
+
+      <!-- Step 2: Kismet -->
+      <div class="wizard-step" id="step-2">
+        <div class="wizard-title">Kismet Configuration</div>
+        <div class="wizard-sub">Configure how SentinelWatch connects to your Kismet instance.</div>
+        <div class="wizard-field"><label>Kismet URL</label><input id="w-kismet-url" value="http://localhost:2501"></div>
+        <div class="wizard-field"><label>Username</label><input id="w-kismet-user" value="kismet"></div>
+        <div class="wizard-field"><label>Password</label><input id="w-kismet-pass" type="password"
+            placeholder="leave blank if none"></div>
+        <div class="wizard-field"><label>Kismet DB Path (glob)</label><input id="w-kismet-path"
+            placeholder="e.g. ~/logs/*.kismet"></div>
+        <div class="wizard-nav">
+          <button class="btn" style="background:var(--glass2);color:var(--text)" onclick="prevStep()">← Back</button>
+          <button class="btn btn-blue" onclick="nextStep()">Next →</button>
+        </div>
+      </div>
+
+      <!-- Step 3: Resend -->
+      <div class="wizard-step" id="step-3">
+        <div class="wizard-title">📧 Email Alerts (Resend.io)</div>
+        <div class="wizard-sub">Get email alerts for critical surveillance events. Get a free API key at
+          <b>resend.com</b>.
+        </div>
+        <div class="wizard-field"><label>Enable Resend Emails</label>
+          <select id="w-resend-enabled">
+            <option value="false">Disabled</option>
+            <option value="true">Enabled</option>
+          </select>
+        </div>
+        <div class="wizard-field"><label>Resend API Key</label><input id="w-resend-key" placeholder="re_xxxxxxxxxxxx">
+        </div>
+        <div class="wizard-field"><label>From Email</label><input id="w-resend-from"
+            placeholder="sentinelwatch@yourdomain.com"></div>
+        <div class="wizard-field"><label>To Email</label><input id="w-resend-to" placeholder="you@email.com"></div>
+        <div class="wizard-field"><label>Send On</label>
+          <select id="w-resend-level">
+            <option value='["CRITICAL"]'>Critical only</option>
+            <option value='["CRITICAL","WARNING"]'>Critical + Warning</option>
+            <option value='["CRITICAL","WARNING","INFO"]'>All alerts</option>
+          </select>
+        </div>
+        <div class="wizard-nav">
+          <button class="btn" style="background:var(--glass2);color:var(--text)" onclick="prevStep()">← Back</button>
+          <button class="btn btn-blue" onclick="nextStep()">Next →</button>
+        </div>
+      </div>
+
+      <!-- Step 4: Twilio -->
+      <div class="wizard-step" id="step-4">
+        <div class="wizard-title">📱 SMS Alerts (Twilio)</div>
+        <div class="wizard-sub">Get text messages for the most critical surveillance alerts. Requires a Twilio account.
+        </div>
+        <div class="wizard-field"><label>Enable Twilio SMS</label>
+          <select id="w-twilio-enabled">
+            <option value="false">Disabled</option>
+            <option value="true">Enabled</option>
+          </select>
+        </div>
+        <div class="wizard-field"><label>Account SID</label><input id="w-twilio-sid" placeholder="ACxxxxxxxxxxxxxxxx">
+        </div>
+        <div class="wizard-field"><label>Auth Token</label><input id="w-twilio-token" type="password"
+            placeholder="your auth token"></div>
+        <div class="wizard-field"><label>From Number</label><input id="w-twilio-from" placeholder="+12345678900"></div>
+        <div class="wizard-field"><label>To Number</label><input id="w-twilio-to" placeholder="+19876543210"></div>
+        <div class="wizard-nav">
+          <button class="btn" style="background:var(--glass2);color:var(--text)" onclick="prevStep()">← Back</button>
+          <button class="btn btn-blue" onclick="nextStep()">Next →</button>
+        </div>
+      </div>
+
+      <!-- Step 5: Alert tuning -->
+      <div class="wizard-step" id="step-5">
+        <div class="wizard-title">🔔 Alert Tuning</div>
+        <div class="wizard-sub">Configure which events trigger notifications.</div>
+        <div class="wizard-field"><label>Known device arrival → notify</label>
+          <select id="w-arrival">
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        </div>
+        <div class="wizard-field"><label>Unknown SSID linger → notify after (minutes)</label>
+          <input id="w-linger" type="number" value="5" min="1" max="60">
+        </div>
+        <div class="wizard-field"><label>Person of Interest min encounters</label>
+          <input id="w-poi-min" type="number" value="3" min="1">
+        </div>
+        <div class="wizard-field"><label>Stalker alert threshold</label>
+          <input id="w-stalker" type="number" value="5" min="1">
+        </div>
+        <div class="wizard-nav">
+          <button class="btn" style="background:var(--glass2);color:var(--text)" onclick="prevStep()">← Back</button>
+          <button class="btn btn-blue" onclick="nextStep()">Next →</button>
+        </div>
+      </div>
+
+      <!-- Step 6: Save & Launch -->
+      <div class="wizard-step" id="step-6">
+        <div class="wizard-title">✅ Save Configuration</div>
+        <div class="wizard-sub">Review and save. A desktop launcher will be created at
+          <b>~/Desktop/SentinelWatch.command</b> — double-click it anytime to start.
+        </div>
+        <div id="wizard-summary"
+          style="background:rgba(255,255,255,.04);border-radius:12px;padding:14px;font-size:12px;line-height:1.8;font-family:monospace;color:var(--muted)">
+          Loading…</div>
+        <div class="wizard-nav">
+          <button class="btn" style="background:var(--glass2);color:var(--text)" onclick="prevStep()">← Back</button>
+          <button class="btn btn-blue" onclick="saveWizard()">💾 Save & Create Launcher</button>
+        </div>
+      </div>
     </div>
-    <div class="wizard-nav"><span></span><button class="btn btn-blue" onclick="nextStep()">Get Started →</button></div>
   </div>
 
-  <!-- Step 2: Kismet -->
-  <div class="wizard-step" id="step-2">
-    <div class="wizard-title">Kismet Configuration</div>
-    <div class="wizard-sub">Configure how SentinelWatch connects to your Kismet instance.</div>
-    <div class="wizard-field"><label>Kismet URL</label><input id="w-kismet-url" value="http://localhost:2501"></div>
-    <div class="wizard-field"><label>Username</label><input id="w-kismet-user" value="kismet"></div>
-    <div class="wizard-field"><label>Password</label><input id="w-kismet-pass" type="password" placeholder="leave blank if none"></div>
-    <div class="wizard-field"><label>Kismet DB Path (glob)</label><input id="w-kismet-path" value="/Users/mistergoodbond/*.kismet"></div>
-    <div class="wizard-nav">
-      <button class="btn" style="background:var(--glass2);color:var(--text)" onclick="prevStep()">← Back</button>
-      <button class="btn btn-blue" onclick="nextStep()">Next →</button>
-    </div>
-  </div>
+  <script>
+    // ─── State ────────────────────────────────────
+    let allDevices = [], currentMode = 'IDLE', notifCfg = {};
+    let wizardStep = 1, totalSteps = 6;
 
-  <!-- Step 3: Resend -->
-  <div class="wizard-step" id="step-3">
-    <div class="wizard-title">📧 Email Alerts (Resend.io)</div>
-    <div class="wizard-sub">Get email alerts for critical surveillance events. Get a free API key at <b>resend.com</b>.</div>
-    <div class="wizard-field"><label>Enable Resend Emails</label>
-      <select id="w-resend-enabled"><option value="false">Disabled</option><option value="true">Enabled</option></select></div>
-    <div class="wizard-field"><label>Resend API Key</label><input id="w-resend-key" placeholder="re_xxxxxxxxxxxx"></div>
-    <div class="wizard-field"><label>From Email</label><input id="w-resend-from" placeholder="sentinelwatch@yourdomain.com"></div>
-    <div class="wizard-field"><label>To Email</label><input id="w-resend-to" placeholder="you@email.com"></div>
-    <div class="wizard-field"><label>Send On</label>
-      <select id="w-resend-level"><option value='["CRITICAL"]'>Critical only</option><option value='["CRITICAL","WARNING"]'>Critical + Warning</option><option value='["CRITICAL","WARNING","INFO"]'>All alerts</option></select></div>
-    <div class="wizard-nav">
-      <button class="btn" style="background:var(--glass2);color:var(--text)" onclick="prevStep()">← Back</button>
-      <button class="btn btn-blue" onclick="nextStep()">Next →</button>
-    </div>
-  </div>
+    // ─── Status polling ───────────────────────────
+    async function refreshStatus() {
+      try {
+        const r = await fetch('/api/status');
+        const d = await r.json();
+        currentMode = d.mode;
+        document.getElementById('current-mode').textContent = d.mode;
+        document.getElementById('s-total').textContent = d.total_devices;
+        document.getElementById('s-unknown').textContent = d.unknown_devices;
+        document.getElementById('s-watchlist').textContent = d.watchlist_count;
+        document.getElementById('s-present').textContent = d.present_count;
+        document.getElementById('dev-count').innerHTML = `Devices: <b>${d.total_devices}</b>`;
+        document.getElementById('unk-count').innerHTML = `Unknown: <b>${d.unknown_devices}</b>`;
+        const ks = document.getElementById('kismet-status');
+        ks.innerHTML = d.kismet_connected
+          ? '<span class="dot dot-green"></span>Kismet: ONLINE'
+          : '<span class="dot dot-red"></span>Kismet: OFFLINE';
+        document.querySelectorAll('.mode-btn').forEach(b => {
+          b.className = 'mode-btn' + (b.dataset.mode === d.mode ? ' active-' + d.mode.toLowerCase() : '');
+        });
+      } catch (e) { }
+    }
 
-  <!-- Step 4: Twilio -->
-  <div class="wizard-step" id="step-4">
-    <div class="wizard-title">📱 SMS Alerts (Twilio)</div>
-    <div class="wizard-sub">Get text messages for the most critical surveillance alerts. Requires a Twilio account.</div>
-    <div class="wizard-field"><label>Enable Twilio SMS</label>
-      <select id="w-twilio-enabled"><option value="false">Disabled</option><option value="true">Enabled</option></select></div>
-    <div class="wizard-field"><label>Account SID</label><input id="w-twilio-sid" placeholder="ACxxxxxxxxxxxxxxxx"></div>
-    <div class="wizard-field"><label>Auth Token</label><input id="w-twilio-token" type="password" placeholder="your auth token"></div>
-    <div class="wizard-field"><label>From Number</label><input id="w-twilio-from" placeholder="+12345678900"></div>
-    <div class="wizard-field"><label>To Number</label><input id="w-twilio-to" placeholder="+19876543210"></div>
-    <div class="wizard-nav">
-      <button class="btn" style="background:var(--glass2);color:var(--text)" onclick="prevStep()">← Back</button>
-      <button class="btn btn-blue" onclick="nextStep()">Next →</button>
-    </div>
-  </div>
-
-  <!-- Step 5: Alert tuning -->
-  <div class="wizard-step" id="step-5">
-    <div class="wizard-title">🔔 Alert Tuning</div>
-    <div class="wizard-sub">Configure which events trigger notifications.</div>
-    <div class="wizard-field"><label>Known device arrival → notify</label>
-      <select id="w-arrival"><option value="true">Yes</option><option value="false">No</option></select></div>
-    <div class="wizard-field"><label>Unknown SSID linger → notify after (minutes)</label>
-      <input id="w-linger" type="number" value="5" min="1" max="60"></div>
-    <div class="wizard-field"><label>Person of Interest min encounters</label>
-      <input id="w-poi-min" type="number" value="3" min="1"></div>
-    <div class="wizard-field"><label>Stalker alert threshold</label>
-      <input id="w-stalker" type="number" value="5" min="1"></div>
-    <div class="wizard-nav">
-      <button class="btn" style="background:var(--glass2);color:var(--text)" onclick="prevStep()">← Back</button>
-      <button class="btn btn-blue" onclick="nextStep()">Next →</button>
-    </div>
-  </div>
-
-  <!-- Step 6: Save & Launch -->
-  <div class="wizard-step" id="step-6">
-    <div class="wizard-title">✅ Save Configuration</div>
-    <div class="wizard-sub">Review and save. A desktop launcher will be created at <b>~/Desktop/SentinelWatch.command</b> — double-click it anytime to start.</div>
-    <div id="wizard-summary" style="background:rgba(255,255,255,.04);border-radius:12px;padding:14px;font-size:12px;line-height:1.8;font-family:monospace;color:var(--muted)">Loading…</div>
-    <div class="wizard-nav">
-      <button class="btn" style="background:var(--glass2);color:var(--text)" onclick="prevStep()">← Back</button>
-      <button class="btn btn-blue" onclick="saveWizard()">💾 Save & Create Launcher</button>
-    </div>
-  </div>
-</div>
-</div>
-
-<script>
-// ─── State ────────────────────────────────────
-let allDevices = [], currentMode = 'IDLE', notifCfg = {};
-let wizardStep = 1, totalSteps = 6;
-
-// ─── Status polling ───────────────────────────
-async function refreshStatus() {
-  try {
-    const r = await fetch('/api/status');
-    const d = await r.json();
-    currentMode = d.mode;
-    document.getElementById('current-mode').textContent = d.mode;
-    document.getElementById('s-total').textContent = d.total_devices;
-    document.getElementById('s-unknown').textContent = d.unknown_devices;
-    document.getElementById('s-watchlist').textContent = d.watchlist_count;
-    document.getElementById('s-present').textContent = d.present_count;
-    document.getElementById('dev-count').innerHTML = `Devices: <b>${d.total_devices}</b>`;
-    document.getElementById('unk-count').innerHTML = `Unknown: <b>${d.unknown_devices}</b>`;
-    const ks = document.getElementById('kismet-status');
-    ks.innerHTML = d.kismet_connected
-      ? '<span class="dot dot-green"></span>Kismet: ONLINE'
-      : '<span class="dot dot-red"></span>Kismet: OFFLINE';
-    document.querySelectorAll('.mode-btn').forEach(b => {
-      b.className = 'mode-btn' + (b.dataset.mode === d.mode ? ' active-' + d.mode.toLowerCase() : '');
-    });
-  } catch(e) {}
-}
-
-// ─── POI / Top Visitors ───────────────────────
-async function refreshPOI() {
-  const ep = (currentMode === 'HOME') ? '/api/top_visitors' : '/api/persons';
-  const key = (currentMode === 'HOME') ? 'visitors' : 'persons';
-  document.getElementById('poi-title').textContent = currentMode === 'HOME' ? '🏠 Top Visitors' : '🚗 Persons of Interest';
-  try {
-    const r = await fetch(ep); const d = await r.json();
-    const list = d[key] || [];
-    document.getElementById('poi-count').textContent = list.length;
-    const el = document.getElementById('poi-list');
-    el.innerHTML = list.slice(0,10).map((p,i) => `
+    // ─── POI / Top Visitors ───────────────────────
+    async function refreshPOI() {
+      const ep = (currentMode === 'HOME') ? '/api/top_visitors' : '/api/persons';
+      const key = (currentMode === 'HOME') ? 'visitors' : 'persons';
+      document.getElementById('poi-title').textContent = currentMode === 'HOME' ? '🏠 Top Visitors' : '🚗 Persons of Interest';
+      try {
+        const r = await fetch(ep); const d = await r.json();
+        const list = d[key] || [];
+        document.getElementById('poi-count').textContent = list.length;
+        const el = document.getElementById('poi-list');
+        el.innerHTML = list.slice(0, 10).map((p, i) => `
       <div class="poi-card" onclick="expandRow('${p.mac}')">
-        <div class="poi-rank">#${i+1} &nbsp; Score: ${p.encounter_score.toFixed(2)}</div>
+        <div class="poi-rank">#${i + 1} &nbsp; Score: ${p.encounter_score.toFixed(2)}</div>
         <div class="poi-mac">${p.display_name || p.mac}</div>
         <div class="poi-meta">
           <span>${p.manufacturer || '?'}</span>
@@ -393,28 +1096,28 @@ async function refreshPOI() {
           ${p.cross_mode_detected ? '<span class="badge badge-red">⚠ CROSS-MODE</span>' : ''}
         </div>
       </div>`).join('') || '<div style="color:var(--muted);font-size:12px">No data yet.</div>';
-  } catch(e) {}
-}
+      } catch (e) { }
+    }
 
-// ─── All Devices ──────────────────────────────
-async function refreshDevices() {
-  try {
-    const r = await fetch('/api/whitelist'); const d = await r.json();
-    allDevices = d.devices || [];
-    filterTable();
-  } catch(e) {}
-}
+    // ─── All Devices ──────────────────────────────
+    async function refreshDevices() {
+      try {
+        const r = await fetch('/api/whitelist'); const d = await r.json();
+        allDevices = d.devices || [];
+        filterTable();
+      } catch (e) { }
+    }
 
-function filterTable() {
-  const q = document.getElementById('search').value.toLowerCase();
-  const g = document.getElementById('filter-group').value;
-  const filtered = allDevices.filter(p =>
-    (!q || (p.mac+p.label+p.manufacturer).toLowerCase().includes(q)) &&
-    (!g || p.group === g)
-  );
-  const tbody = document.getElementById('device-tbody');
-  tbody.innerHTML = filtered.map(p => `
-    <tr onclick="toggleExpand('expand-${p.mac.replace(/:/g,'')}')" style="cursor:pointer">
+    function filterTable() {
+      const q = document.getElementById('search').value.toLowerCase();
+      const g = document.getElementById('filter-group').value;
+      const filtered = allDevices.filter(p =>
+        (!q || (p.mac + p.label + p.manufacturer).toLowerCase().includes(q)) &&
+        (!g || p.group === g)
+      );
+      const tbody = document.getElementById('device-tbody');
+      tbody.innerHTML = filtered.map(p => `
+    <tr onclick="toggleExpand('expand-${p.mac.replace(/:/g, '')}')" style="cursor:pointer">
       <td class="mono">${p.label ? `<b>${p.label}</b><br><span style="color:var(--muted)">${p.mac}</span>` : p.mac}</td>
       <td>${p.manufacturer || '—'}</td>
       <td><span class="badge ${groupBadge(p.group)}">${p.group}</span></td>
@@ -422,211 +1125,246 @@ function filterTable() {
       <td style="color:var(--teal)">${p.encounter_score.toFixed(2)}</td>
       <td>${p.signal_latest ?? '—'}</td>
       <td class="trend-${trendClass(p.signal_trend)}">${trendArrow(p.signal_trend)}</td>
-      <td><span style="font-size:10px">${(p.modes_seen_in||[]).join(', ') || '—'}</span></td>
-      <td style="color:var(--muted);font-size:11px">${p.last_seen ? p.last_seen.substr(0,16) : '—'}</td>
+      <td><span style="font-size:10px">${(p.modes_seen_in || []).join(', ') || '—'}</span></td>
+      <td style="color:var(--muted);font-size:11px">${p.last_seen ? p.last_seen.substr(0, 16) : '—'}</td>
       <td>
         ${p.is_watchlisted
           ? `<button class="btn btn-sm" style="background:rgba(255,255,255,.06);color:var(--muted)" onclick="event.stopPropagation();removeWatch('${p.mac}')">Unwatch</button>`
           : `<button class="btn btn-red btn-sm" onclick="event.stopPropagation();quickWatch('${p.mac}')">Watch</button>`}
       </td>
     </tr>
-    <tr><td colspan="10" class="expand-panel" id="expand-${p.mac.replace(/:/g,'')}">
+    <tr><td colspan="10" class="expand-panel" id="expand-${p.mac.replace(/:/g, '')}">
       <div class="form-row">
         <div style="flex:1"><label style="font-size:10px;color:var(--muted)">LABEL</label><input class="lbl-input" data-mac="${p.mac}" value="${p.label}" placeholder="e.g. Mom's iPhone" style="width:100%"></div>
         <div><label style="font-size:10px;color:var(--muted)">GROUP</label><select class="grp-select" data-mac="${p.mac}" style="min-width:120px">
-          ${['family','friend','neighbor','work','unknown','watchlist','suspect'].map(g=>`<option ${p.group===g?'selected':''}>${g}</option>`).join('')}
+          ${['family', 'friend', 'neighbor', 'work', 'unknown', 'watchlist', 'suspect'].map(g => `<option ${p.group === g ? 'selected' : ''}>${g}</option>`).join('')}
         </select></div>
       </div>
-      <textarea class="notes-input" data-mac="${p.mac}" placeholder="Notes…" style="width:100%;margin-bottom:10px">${p.notes||''}</textarea>
+      <textarea class="notes-input" data-mac="${p.mac}" placeholder="Notes…" style="width:100%;margin-bottom:10px">${p.notes || ''}</textarea>
       <div class="form-row">
         <button class="btn btn-blue btn-sm" onclick="labelDevice('${p.mac}')">Save Label</button>
         <input class="watch-reason" placeholder="Watchlist reason…" style="flex:1">
         <button class="btn btn-red btn-sm" onclick="addWatch('${p.mac}', this)">+ Watchlist</button>
       </div>
       <div style="margin-top:8px;font-size:11px;color:var(--muted)">
-        SSIDs: ${(p.ssids||[]).join(', ') || '(none)'} &nbsp;|&nbsp;
-        First seen: ${p.first_seen ? p.first_seen.substr(0,16) : '—'}
+        SSIDs: ${(p.ssids || []).join(', ') || '(none)'} &nbsp;|&nbsp;
+        First seen: ${p.first_seen ? p.first_seen.substr(0, 16) : '—'}
         ${p.cross_mode_detected ? ' &nbsp;|&nbsp; <span style="color:var(--red);font-weight:700">⚠ CROSS-MODE DETECTED</span>' : ''}
       </div>
     </td></tr>
   `).join('');
-}
+    }
 
-function toggleExpand(id) {
-  const el = document.getElementById(id);
-  if(el) { el.classList.toggle('open'); }
-}
-function expandRow(mac) { toggleExpand('expand-' + mac.replace(/:/g,'')); }
+    function toggleExpand(id) {
+      const el = document.getElementById(id);
+      if (el) { el.classList.toggle('open'); }
+    }
+    function expandRow(mac) { toggleExpand('expand-' + mac.replace(/:/g, '')); }
 
-// ─── Watchlist ────────────────────────────────
-async function refreshWatchlist() {
-  try {
-    const r = await fetch('/api/watchlist'); const d = await r.json();
-    const wl = d.watchlist || [];
-    document.getElementById('wl-badge').textContent = wl.length;
-    document.getElementById('wl-list').innerHTML = wl.length
-      ? wl.map(p=>`<div class="wl-item">
+    // ─── Watchlist ────────────────────────────────
+    async function refreshWatchlist() {
+      try {
+        const r = await fetch('/api/watchlist'); const d = await r.json();
+        const wl = d.watchlist || [];
+        document.getElementById('wl-badge').textContent = wl.length;
+        document.getElementById('wl-list').innerHTML = wl.length
+          ? wl.map(p => `<div class="wl-item">
           <span style="font-size:18px">⚠</span>
-          <div style="flex:1"><div style="font-size:12px;font-weight:600">${p.label||p.mac}</div>
+          <div style="flex:1"><div style="font-size:12px;font-weight:600">${p.label || p.mac}</div>
           <div class="mono" style="font-size:10px;color:var(--muted)">${p.mac}</div>
-          <div style="font-size:10px;color:var(--muted)">${p.notes||''}</div></div>
+          <div style="font-size:10px;color:var(--muted)">${p.notes || ''}</div></div>
           <button class="btn btn-sm" style="background:rgba(255,255,255,.06);color:var(--muted)" onclick="removeWatch('${p.mac}')">Remove</button>
         </div>`).join('')
-      : '<div style="color:var(--muted);font-size:12px">Watchlist is empty.</div>';
-  } catch(e) {}
-}
+          : '<div style="color:var(--muted);font-size:12px">Watchlist is empty.</div>';
+      } catch (e) { }
+    }
 
-// ─── Multi-location ───────────────────────────
-async function refreshMLT() {
-  try {
-    const r = await fetch('/api/stalkers'); const d = await r.json();
-    const list = d.stalkers || [];
-    document.getElementById('mlt-count').textContent = list.length;
-    document.getElementById('mlt-list').innerHTML = list.length
-      ? list.slice(0,8).map((p,i)=>`
+    // ─── Multi-location ───────────────────────────
+    async function refreshMLT() {
+      try {
+        const r = await fetch('/api/stalkers'); const d = await r.json();
+        const list = d.stalkers || [];
+        document.getElementById('mlt-count').textContent = list.length;
+        document.getElementById('mlt-list').innerHTML = list.length
+          ? list.slice(0, 8).map((p, i) => `
         <div class="mlt-row">
-          <div class="mlt-rank">#${i+1}</div>
+          <div class="mlt-rank">#${i + 1}</div>
           <div class="mlt-info">
-            <div style="font-size:13px;font-weight:600">${p.label||p.mac}</div>
-            <div style="font-size:11px;color:var(--muted)">${p.manufacturer||'?'} &nbsp;|&nbsp; ${p.unique_location_count} locations &nbsp;|&nbsp; ${p.total_hits} hits</div>
-            <div style="font-size:10px;color:var(--muted);margin-top:3px">${(p.locations_seen||[]).slice(0,4).map(l=>l.label).join(' → ')}</div>
+            <div style="font-size:13px;font-weight:600">${p.label || p.mac}</div>
+            <div style="font-size:11px;color:var(--muted)">${p.manufacturer || '?'} &nbsp;|&nbsp; ${p.unique_location_count} locations &nbsp;|&nbsp; ${p.total_hits} hits</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:3px">${(p.locations_seen || []).slice(0, 4).map(l => l.label).join(' → ')}</div>
           </div>
           <div class="mlt-score">${p.stalker_score.toFixed(1)}</div>
         </div>`).join('')
-      : '<div style="color:var(--muted);font-size:12px">No multi-location suspects yet. Keep roaming to build data.</div>';
-  } catch(e) {}
-}
+          : '<div style="color:var(--muted);font-size:12px">No multi-location suspects yet. Keep roaming to build data.</div>';
+      } catch (e) { }
+    }
 
-// ─── Notifications config ─────────────────────
-async function loadNotifConfig() {
-  try {
-    const r = await fetch('/api/notifications/config'); const d = await r.json();
-    notifCfg = d.alerts || {};
-    const rs = notifCfg.resend || {};
-    const tw = notifCfg.twilio || {};
-    setToggle('toggle-resend', rs.enabled);
-    setToggle('toggle-twilio', tw.enabled);
-    setToggle('toggle-arrival', notifCfg.known_device_arrival_notify);
-    setToggle('toggle-linger', notifCfg.unknown_ssid_linger_notify);
-    document.getElementById('resend-status').textContent = rs.enabled ? `→ ${rs.to_email||'?'}` : 'Disabled';
-    document.getElementById('twilio-status').textContent = tw.enabled ? `→ ${tw.to_number||'?'}` : 'Disabled';
-  } catch(e) {}
-}
+    // ─── Notifications config ─────────────────────
+    async function loadNotifConfig() {
+      try {
+        const r = await fetch('/api/notifications/config'); const d = await r.json();
+        notifCfg = d.alerts || {};
+        const rs = notifCfg.resend || {};
+        const tw = notifCfg.twilio || {};
+        setToggle('toggle-resend', rs.enabled);
+        setToggle('toggle-twilio', tw.enabled);
+        setToggle('toggle-arrival', notifCfg.known_device_arrival_notify);
+        setToggle('toggle-linger', notifCfg.unknown_ssid_linger_notify);
+        document.getElementById('resend-status').textContent = rs.enabled ? `→ ${rs.to_email || '?'}` : 'Disabled';
+        document.getElementById('twilio-status').textContent = tw.enabled ? `→ ${tw.to_number || '?'}` : 'Disabled';
+      } catch (e) { }
+    }
 
-function setToggle(id, on) {
-  const el = document.getElementById(id);
-  if(el) { el.classList.toggle('on', !!on); }
-}
+    function setToggle(id, on) {
+      const el = document.getElementById(id);
+      if (el) { el.classList.toggle('on', !!on); }
+    }
 
-async function toggleNotif(channel) {
-  const el = document.getElementById('toggle-' + channel);
-  const isOn = el.classList.toggle('on');
-  await fetch('/api/notifications/config', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({[channel]: {enabled: isOn}})});
-  loadNotifConfig();
-}
+    async function toggleNotif(channel) {
+      const el = document.getElementById('toggle-' + channel);
+      const isOn = el.classList.toggle('on');
+      await fetch('/api/notifications/config', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [channel]: { enabled: isOn } })
+      });
+      loadNotifConfig();
+    }
 
-async function toggleNotifFlag(flag) {
-  const id = flag === 'known_device_arrival_notify' ? 'toggle-arrival' : 'toggle-linger';
-  const el = document.getElementById(id);
-  const isOn = el.classList.toggle('on');
-  await fetch('/api/notifications/config', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({[flag]: isOn})});
-}
+    async function toggleNotifFlag(flag) {
+      const id = flag === 'known_device_arrival_notify' ? 'toggle-arrival' : 'toggle-linger';
+      const el = document.getElementById(id);
+      const isOn = el.classList.toggle('on');
+      await fetch('/api/notifications/config', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [flag]: isOn })
+      });
+    }
 
-// ─── Device actions ───────────────────────────
-async function labelDevice(mac) {
-  const row = document.getElementById('expand-' + mac.replace(/:/g,''));
-  const label = row.querySelector('.lbl-input').value;
-  const group = row.querySelector('.grp-select').value;
-  const notes = row.querySelector('.notes-input').value;
-  await fetch('/api/label', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({mac,label,group,notes})});
-  refreshDevices(); refreshPOI();
-}
+    // ─── Device actions ───────────────────────────
+    async function labelDevice(mac) {
+      const row = document.getElementById('expand-' + mac.replace(/:/g, ''));
+      const label = row.querySelector('.lbl-input').value;
+      const group = row.querySelector('.grp-select').value;
+      const notes = row.querySelector('.notes-input').value;
+      await fetch('/api/label', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mac, label, group, notes })
+      });
+      refreshDevices(); refreshPOI();
+    }
 
-async function addWatch(mac, btn) {
-  const row = btn.closest('td');
-  const reason = row.querySelector('.watch-reason').value;
-  await fetch('/api/watchlist/add', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({mac,reason})});
-  refreshWatchlist(); refreshDevices();
-}
+    async function addWatch(mac, btn) {
+      const row = btn.closest('td');
+      const reason = row.querySelector('.watch-reason').value;
+      await fetch('/api/watchlist/add', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mac, reason })
+      });
+      refreshWatchlist(); refreshDevices();
+    }
 
-async function quickWatch(mac) {
-  const reason = prompt('Watchlist reason:', '');
-  if(reason === null) return;
-  await fetch('/api/watchlist/add', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({mac,reason})});
-  refreshWatchlist(); refreshDevices();
-}
+    async function quickWatch(mac) {
+      const reason = prompt('Watchlist reason:', '');
+      if (reason === null) return;
+      await fetch('/api/watchlist/add', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mac, reason })
+      });
+      refreshWatchlist(); refreshDevices();
+    }
 
-async function removeWatch(mac) {
-  await fetch('/api/watchlist/remove', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({mac})});
-  refreshWatchlist(); refreshDevices();
-}
+    async function removeWatch(mac) {
+      await fetch('/api/watchlist/remove', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mac })
+      });
+      refreshWatchlist(); refreshDevices();
+    }
 
-// ─── Mode switch ──────────────────────────────
-document.querySelectorAll('.mode-btn').forEach(btn => {
-  btn.addEventListener('click', async () => {
-    const mode = btn.dataset.mode;
-    await fetch('/api/mode', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({mode})});
-    refreshStatus(); refreshPOI();
-  });
-});
+    // ─── Mode switch ──────────────────────────────
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const mode = btn.dataset.mode;
+        await fetch('/api/mode', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode })
+        });
+        refreshStatus(); refreshPOI();
+      });
+    });
 
-// ─── Exports ─────────────────────────────────
-async function exportCSV() { await fetch('/api/export/csv'); alert('CSV exported to data/ folder'); }
-async function exportJSON() { await fetch('/api/export/json'); alert('JSON exported to data/ folder'); }
+    // Periodically update system stats
+    async function updateSysStats() {
+      try {
+        const resp = await fetch("/api/sys_stats");
+        const data = await resp.json();
+        if (data.error) return;
 
-// ─── SSE stream ───────────────────────────────
-function connectSSE() {
-  const es = new EventSource('/api/stream');
-  es.onmessage = e => {
-    try {
-      const alert = JSON.parse(e.data);
-      const feed = document.getElementById('alerts-feed');
-      const ts = alert.timestamp ? alert.timestamp.substr(11,8) : '';
-      const div = document.createElement('div');
-      div.className = `alert-item alert-${alert.level}`;
-      div.innerHTML = `<div>${alert.message}</div><div class="alert-time">${alert.level} · ${ts}</div>`;
-      feed.prepend(div);
-      if(feed.children.length > 100) feed.lastChild.remove();
-    } catch(e) {}
-  };
-  es.onerror = () => setTimeout(connectSSE, 3000);
-}
+        document.getElementById("stat-cpu").textContent = `${Math.round(data.cpu)}%`;
+        document.getElementById("stat-mem").textContent = `${Math.round(data.memory)}%`;
+        if (data.temp) {
+          document.getElementById("stat-temp").textContent = `${Math.round(data.temp)}°C`;
+        } else {
+          document.getElementById("stat-temp").textContent = "N/A";
+        }
+        document.getElementById("platform-badge").textContent = data.platform;
+      } catch (e) { console.error("Stats update failed", e); }
+    }
 
-// ─── Helpers ──────────────────────────────────
-function trendArrow(t) { return {approaching:'↑',receding:'↓',stable:'→'}[t]||'?'; }
-function trendClass(t) { return {approaching:'up',receding:'down',stable:'stable'}[t]||'stable'; }
-function groupBadge(g) { return {family:'badge-green',friend:'badge-green',neighbor:'badge-gray',work:'badge-gray',unknown:'badge-orange',watchlist:'badge-red',suspect:'badge-red'}[g]||'badge-gray'; }
+    setInterval(updateSysStats, 5000);
+    updateSysStats();
 
-// ─── Wizard ───────────────────────────────────
-function openWizard() { document.getElementById('wizard-modal').style.display='flex'; renderDots(); }
-function closeWizard() { document.getElementById('wizard-modal').style.display='none'; }
-function renderDots() {
-  document.getElementById('step-dots').innerHTML =
-    Array.from({length:totalSteps},(_,i)=>`<div class="step-dot ${i<wizardStep?'done':''}"></div>`).join('');
-}
-function nextStep() {
-  if(wizardStep === totalSteps - 1) buildSummary();
-  document.getElementById('step-'+wizardStep).classList.remove('active');
-  wizardStep = Math.min(wizardStep+1, totalSteps);
-  document.getElementById('step-'+wizardStep).classList.add('active');
-  renderDots();
-}
-function prevStep() {
-  document.getElementById('step-'+wizardStep).classList.remove('active');
-  wizardStep = Math.max(wizardStep-1, 1);
-  document.getElementById('step-'+wizardStep).classList.add('active');
-  renderDots();
-}
-function buildSummary() {
-  const s = document.getElementById('wizard-summary');
-  s.innerHTML = `
+    // ─── Exports ─────────────────────────────────
+    async function exportCSV() { await fetch('/api/export/csv'); alert('CSV exported to data/ folder'); }
+    async function exportJSON() { await fetch('/api/export/json'); alert('JSON exported to data/ folder'); }
+
+    // ─── SSE stream ───────────────────────────────
+    function connectSSE() {
+      const es = new EventSource('/api/stream');
+      es.onmessage = e => {
+        try {
+          const alert = JSON.parse(e.data);
+          const feed = document.getElementById('alerts-feed');
+          const ts = alert.timestamp ? alert.timestamp.substr(11, 8) : '';
+          const div = document.createElement('div');
+          div.className = `alert-item alert-${alert.level}`;
+          div.innerHTML = `<div>${alert.message}</div><div class="alert-time">${alert.level} · ${ts}</div>`;
+          feed.prepend(div);
+          if (feed.children.length > 100) feed.lastChild.remove();
+        } catch (e) { }
+      };
+      es.onerror = () => setTimeout(connectSSE, 3000);
+    }
+
+    // ─── Helpers ──────────────────────────────────
+    function trendArrow(t) { return { approaching: '↑', receding: '↓', stable: '→' }[t] || '?'; }
+    function trendClass(t) { return { approaching: 'up', receding: 'down', stable: 'stable' }[t] || 'stable'; }
+    function groupBadge(g) { return { family: 'badge-green', friend: 'badge-green', neighbor: 'badge-gray', work: 'badge-gray', unknown: 'badge-orange', watchlist: 'badge-red', suspect: 'badge-red' }[g] || 'badge-gray'; }
+
+    // ─── Wizard ───────────────────────────────────
+    function openWizard() { document.getElementById('wizard-modal').style.display = 'flex'; renderDots(); }
+    function closeWizard() { document.getElementById('wizard-modal').style.display = 'none'; }
+    function renderDots() {
+      document.getElementById('step-dots').innerHTML =
+        Array.from({ length: totalSteps }, (_, i) => `<div class="step-dot ${i < wizardStep ? 'done' : ''}"></div>`).join('');
+    }
+    function nextStep() {
+      if (wizardStep === totalSteps - 1) buildSummary();
+      document.getElementById('step-' + wizardStep).classList.remove('active');
+      wizardStep = Math.min(wizardStep + 1, totalSteps);
+      document.getElementById('step-' + wizardStep).classList.add('active');
+      renderDots();
+    }
+    function prevStep() {
+      document.getElementById('step-' + wizardStep).classList.remove('active');
+      wizardStep = Math.max(wizardStep - 1, 1);
+      document.getElementById('step-' + wizardStep).classList.add('active');
+      renderDots();
+    }
+    function buildSummary() {
+      const s = document.getElementById('wizard-summary');
+      s.innerHTML = `
     Kismet URL: ${document.getElementById('w-kismet-url').value}<br>
     Kismet DB : ${document.getElementById('w-kismet-path').value}<br>
     Resend    : ${document.getElementById('w-resend-enabled').value === 'true' ? '✅ ' + document.getElementById('w-resend-to').value : '⬜ Disabled'}<br>
@@ -635,46 +1373,47 @@ function buildSummary() {
     Linger threshold: ${document.getElementById('w-linger').value} min<br>
     POI min encounters: ${document.getElementById('w-poi-min').value}
   `;
-}
+    }
 
-async function saveWizard() {
-  const cfg = {
-    resend: {
-      enabled: document.getElementById('w-resend-enabled').value === 'true',
-      api_key: document.getElementById('w-resend-key').value,
-      from_email: document.getElementById('w-resend-from').value,
-      to_email: document.getElementById('w-resend-to').value,
-      send_on: JSON.parse(document.getElementById('w-resend-level').value),
-    },
-    twilio: {
-      enabled: document.getElementById('w-twilio-enabled').value === 'true',
-      account_sid: document.getElementById('w-twilio-sid').value,
-      auth_token: document.getElementById('w-twilio-token').value,
-      from_number: document.getElementById('w-twilio-from').value,
-      to_number: document.getElementById('w-twilio-to').value,
-      send_on: ['CRITICAL'],
-    },
-    known_device_arrival_notify: document.getElementById('w-arrival').value === 'true',
-    unknown_ssid_linger_notify: true,
-  };
-  await fetch('/api/notifications/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(cfg)});
+    async function saveWizard() {
+      const cfg = {
+        resend: {
+          enabled: document.getElementById('w-resend-enabled').value === 'true',
+          api_key: document.getElementById('w-resend-key').value,
+          from_email: document.getElementById('w-resend-from').value,
+          to_email: document.getElementById('w-resend-to').value,
+          send_on: JSON.parse(document.getElementById('w-resend-level').value),
+        },
+        twilio: {
+          enabled: document.getElementById('w-twilio-enabled').value === 'true',
+          account_sid: document.getElementById('w-twilio-sid').value,
+          auth_token: document.getElementById('w-twilio-token').value,
+          from_number: document.getElementById('w-twilio-from').value,
+          to_number: document.getElementById('w-twilio-to').value,
+          send_on: ['CRITICAL'],
+        },
+        known_device_arrival_notify: document.getElementById('w-arrival').value === 'true',
+        unknown_ssid_linger_notify: true,
+      };
+      await fetch('/api/notifications/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) });
 
-  // Ask backend to create desktop launcher
-  await fetch('/api/create_launcher', {method:'POST'});
-  alert('✅ Configuration saved!\n\nSentinelWatch.command created on your Desktop.\nDouble-click it anytime to start the system.');
-  closeWizard();
-  loadNotifConfig();
-}
+      // Ask backend to create desktop launcher
+      await fetch('/api/create_launcher', { method: 'POST' });
+      alert('✅ Configuration saved!\n\nSentinelWatch.command created on your Desktop.\nDouble-click it anytime to start the system.');
+      closeWizard();
+      loadNotifConfig();
+    }
 
-// ─── Boot ────────────────────────────────────
-connectSSE();
-refreshStatus();
-refreshPOI();
-refreshDevices();
-refreshWatchlist();
-refreshMLT();
-loadNotifConfig();
-setInterval(() => { refreshStatus(); refreshPOI(); refreshDevices(); refreshWatchlist(); refreshMLT(); }, 15000);
-</script>
+    // ─── Boot ────────────────────────────────────
+    connectSSE();
+    refreshStatus();
+    refreshPOI();
+    refreshDevices();
+    refreshWatchlist();
+    refreshMLT();
+    loadNotifConfig();
+    setInterval(() => { refreshStatus(); refreshPOI(); refreshDevices(); refreshWatchlist(); refreshMLT(); }, 15000);
+  </script>
 </body>
+
 </html>
