@@ -9,6 +9,7 @@ import json
 import os
 import sqlite3
 import smtplib
+import subprocess
 from secure_database import SecureKismetDB
 import csv
 import threading
@@ -335,8 +336,7 @@ class TailDetector:
                     ssid_str = ssids[0] if ssids else "(hidden)"
                     self.fire_alert(
                         "WARNING",
-                        f"Unknown device lingering {elapsed:.1f}min near home: "
-                        f"{mac} SSID:{ssid_str} Signal:{signal} dBm"
+                        f"LINGERING: {mac} ({ssid_str}) {elapsed:.1f}min"
                     )
                     if self._notif:
                         self._notif.notify_unknown_ssid_linger(
@@ -375,65 +375,97 @@ class TailDetector:
         other = "ROAM" if current_mode == "HOME" else "HOME"
         if other in p.modes_seen_in and not p.cross_mode_detected:
             p.cross_mode_detected = True
-            msg = (f"Device {p.display_name()} ({p.mac}) was seen while roaming "
-                   f"and is now at your HOME location. POTENTIAL SURVEILLANCE.")
+            msg = f"⚠ CROSS-MODE: {p.display_name()} seen in ROAMING & STATIONARY"
             self.fire_alert("CRITICAL", msg)
             if self._notif:
                 self._notif.dispatch_alert("CRITICAL", msg, self.config)
 
     # ═══════════════════════════════════════════
-    #  MODE 1: HOME
+    #  CONSOLIDATED MODES (Phase 8)
     # ═══════════════════════════════════════════
-    def run_home_mode(self):
-        self.current_mode = "HOME"
-        self.fire_alert("INFO", "HOME mode started — scanning all Kismet databases")
-        files = self._get_kismet_files()
-        if not files:
-            self.fire_alert("WARNING", "No .kismet database files found. Is Kismet running?")
-            return
 
-        for db_path in files:
-            for raw in self._parse_kismet_db(db_path):
-                p = self._update_profile(raw, "HOME")
-                p.home_encounters += 1
-                p.encounter_score = self._compute_score(p)
-                p.signal_trend = self.calculate_signal_trend(p.mac)
-                self._check_cross_mode(p, "HOME")
-                self._check_linger(p.mac, p.ssids, raw.get("signal"))
+    def run_stationary_mode(self, doorbell_alerts: bool = False):
+        """
+        Consolidated STATIONARY mode. Performs both batch scanning (Home)
+        and optional real-time arrival/departure tracking (Doorbell).
+        """
+        self.current_mode = "STATIONARY"
+        alert_msg = "STATIONARY mode started" + (" (with Doorbell Alerts)" if doorbell_alerts else "")
+        self.fire_alert("INFO", alert_msg)
+        
+        interval = self.timing.get("doorbell_scan_interval", 10)
+        unknown_streak: dict[str, int] = {}
+        prev_present: set = set()
 
-        self._save_whitelist()
-        top = self.get_top_visitors(20)
-        self._print_home_table(top)
+        while not _push_alert.__globals__.get('_bg_stop_event').is_set():
+            files = self._get_kismet_files(hours=1)
+            current_macs: set = set()
+            
+            for db_path in files:
+                for raw in self._parse_kismet_db(db_path):
+                    # Basic update
+                    p = self._update_profile(raw, "STATIONARY")
+                    p.home_encounters += 1
+                    p.encounter_score = self._compute_score(p)
+                    p.signal_trend = self.calculate_signal_trend(p.mac)
+                    
+                    # Stationary specific logic
+                    if raw.get("last_time"):
+                        age = datetime.now() - datetime.fromtimestamp(raw["last_time"])
+                        if age <= timedelta(seconds=interval * 3):
+                            current_macs.add(p.mac)
 
-    def _print_home_table(self, visitors):
-        if HAS_RICH:
-            t = Table(title="🏠  SentinelWatch — Top Visitors (HOME)", box=box.ROUNDED,
-                      header_style="bold cyan", border_style="cyan")
-            t.add_column("Rank", width=6); t.add_column("Label / MAC")
-            t.add_column("Manufacturer"); t.add_column("Group")
-            t.add_column("Enc", justify="right"); t.add_column("Score", justify="right")
-            t.add_column("Last Seen")
-            for i, p in enumerate(visitors, 1):
-                color = "red" if p.is_watchlisted else ("yellow" if p.group == "suspect" else "white")
-                t.add_row(f"#{i}", f"[{color}]{p.display_name()}[/{color}]",
-                          p.manufacturer, p.group, str(p.home_encounters),
-                          f"{p.encounter_score:.2f}", p.last_seen[:19] if p.last_seen else "—")
-            console.print(t)
+                    # Doorbell functionality (if enabled)
+                    if doorbell_alerts and p.mac not in prev_present:
+                        self._handle_arrival(p, raw, unknown_streak)
+
+                    # Linger check (always active in stationary)
+                    if not p.label:
+                        self._check_linger(p.mac, p.ssids, raw.get("signal"))
+                    
+                    self._check_cross_mode(p, "STATIONARY")
+
+            # Departure logic (if enabled)
+            if doorbell_alerts:
+                for mac in prev_present - current_macs:
+                    self._handle_departure(mac, unknown_streak)
+
+            self.present_macs = current_macs
+            prev_present = set(current_macs)
+            self._save_whitelist()
+            time.sleep(interval)
+
+    def _handle_arrival(self, p: DeviceProfile, raw: dict, unknown_streak: dict):
+        name = p.display_name()
+        if p.label:
+            self.fire_alert("INFO", f"ARRIVED: {name}")
+            if self._notif and self.alert_cfg.get("known_device_arrival_notify"):
+                self._notif.notify_known_arrival(name, p.mac, raw.get("signal"), self.config)
         else:
-            hdr = f"  {'#':<5} {'Label/MAC':<22} {'Mfr':<14} {'Group':<10} {'Enc':>5} {'Score':>7} Last Seen"
-            print(f"\n{'─'*80}\n  🏠 TOP VISITORS — HOME MODE\n{'─'*80}")
-            print(hdr); print("─"*80)
-            for i, p in enumerate(visitors, 1):
-                print(f"  {i:<5} {p.display_name():<22} {p.manufacturer:<14} {p.group:<10} "
-                      f"{p.home_encounters:>5} {p.encounter_score:>7.2f} {p.last_seen[:19] if p.last_seen else '—'}")
-            print("─"*80)
+            unknown_streak[p.mac] = unknown_streak.get(p.mac, 0) + 1
+            if p.is_watchlisted:
+                msg = f"⚠ WATCHLIST: {name} ({p.manufacturer})"
+                self.fire_alert("CRITICAL", msg)
+                if self._notif:
+                    self._notif.notify_watchlist_hit(name, p.mac, raw.get("signal"), p.notes, self.config)
+            else:
+                lvl = "WARNING" if unknown_streak[p.mac] >= 3 else "INFO"
+                self.fire_alert(lvl, f"NEW: {name} ({p.manufacturer})")
+
+    def _handle_departure(self, mac: str, unknown_streak: dict):
+        p = self.devices.get(mac)
+        name = p.display_name() if p else mac
+        self.fire_alert("INFO", f"LEFT: {name}")
+        unknown_streak.pop(mac, None)
+        self._linger_first_seen.pop(mac, None)
+        self._linger_alerted.discard(mac)
 
     # ═══════════════════════════════════════════
-    #  MODE 2: ROAM
+    #  MODE 2: ROAMING
     # ═══════════════════════════════════════════
-    def run_roam_mode(self, hours: int = 24, continuous: bool = True):
-        self.current_mode = "ROAM"
-        self.fire_alert("INFO", f"ROAM mode started — scanning last {hours}h")
+    def run_roaming_mode(self, hours: int = 24, continuous: bool = True):
+        self.current_mode = "ROAMING"
+        self.fire_alert("INFO", f"ROAMING mode started — scanning last {hours}h")
         interval = self.timing.get("roam_scan_interval", 15)
 
         def _scan():
@@ -445,42 +477,34 @@ class TailDetector:
             for db_path in files:
                 for raw in self._parse_kismet_db(db_path):
                     mac = raw["mac"]
-                    p = self._update_profile(raw, "ROAM")
+                    p = self._update_profile(raw, "ROAMING")
                     p.encounter_score = self._compute_score(p)
                     p.signal_trend = self.calculate_signal_trend(mac)
 
-                    if "HOME" not in p.modes_seen_in:
+                    if "STATIONARY" not in p.modes_seen_in:
                         p.roam_encounters += 1
                         poi_macs.add(mac)
 
                     if p.is_watchlisted:
-                        msg = (f"WATCHLISTED device detected: {p.display_name()} "
-                               f"({mac}) Signal: {raw.get('signal','?')} dBm")
+                        msg = f"WATCHLISTED device detected: {p.display_name()} ({mac})"
                         self.fire_alert("CRITICAL", msg)
                         if self._notif:
-                            self._notif.notify_watchlist_hit(p.label, mac,
-                                raw.get("signal"), p.notes, self.config)
+                            self._notif.notify_watchlist_hit(p.label, mac, raw.get("signal"), p.notes, self.config)
 
                     thresh = self.thresholds.get("signal_approaching_threshold", -65)
                     if p.signal_trend == "approaching" and (raw.get("signal") or -100) > thresh:
-                        self.fire_alert("WARNING",
-                            f"Device approaching: {p.display_name()} ({mac}) "
-                            f"Signal: {raw.get('signal')} dBm ↑")
+                        self.fire_alert("WARNING", f"Device approaching: {p.display_name()} ({mac}) {raw.get('signal')} dBm ↑")
 
-                    if "HOME" in p.modes_seen_in:
-                        self._check_cross_mode(p, "ROAM")
+                    if "STATIONARY" in p.modes_seen_in:
+                        self._check_cross_mode(p, "ROAMING")
 
-            pois = sorted(
-                [self.devices[m] for m in poi_macs if m in self.devices],
-                key=lambda x: x.encounter_score, reverse=True
-            )
+            pois = sorted([self.devices[m] for m in poi_macs if m in self.devices], key=lambda x: x.encounter_score, reverse=True)
             self._print_roam_table(pois[:20])
             self._save_whitelist()
 
         if continuous:
-            while True:
+            while not _push_alert.__globals__.get('_bg_stop_event').is_set():
                 _scan()
-                self.fire_alert("INFO", f"Next roam scan in {interval}s…")
                 time.sleep(interval)
         else:
             _scan()
@@ -503,112 +527,28 @@ class TailDetector:
             console.print(t)
 
     # ═══════════════════════════════════════════
-    #  MODE 3: DOORBELL
-    # ═══════════════════════════════════════════
-    def run_doorbell_mode(self):
-        self.current_mode = "DOORBELL"
-        self.fire_alert("INFO", "DOORBELL mode started — monitoring arrivals/departures")
-        interval = self.timing.get("doorbell_scan_interval", 10)
-        unknown_streak: dict[str, int] = {}
-        prev_present: set = set()
-
-        while True:
-            files = self._get_kismet_files(hours=1)
-            current_macs: set = set()
-
-            for db_path in files:
-                for raw in self._parse_kismet_db(db_path):
-                    if raw.get("last_time"):
-                        age = datetime.now() - datetime.fromtimestamp(raw["last_time"])
-                        if age > timedelta(seconds=interval * 3):
-                            continue
-                    mac = raw["mac"]
-                    current_macs.add(mac)
-                    p = self._update_profile(raw, "DOORBELL")
-                    p.encounter_score = self._compute_score(p)
-
-                    if mac not in prev_present:
-                        if p.label:
-                            self.fire_alert("INFO", f"ARRIVAL: {p.label} ({mac}) is here")
-                            if self._notif and self.alert_cfg.get("known_device_arrival_notify"):
-                                self._notif.notify_known_arrival(
-                                    p.label, mac, raw.get("signal"), self.config)
-                        else:
-                            unknown_streak[mac] = unknown_streak.get(mac, 0) + 1
-                            if p.is_watchlisted:
-                                msg = (f"WATCHLISTED device arrived: {mac} "
-                                       f"({p.manufacturer}) Signal:{raw.get('signal')} dBm")
-                                self.fire_alert("CRITICAL", msg)
-                                if self._notif:
-                                    self._notif.notify_watchlist_hit(
-                                        p.label, mac, raw.get("signal"), p.notes, self.config)
-                            else:
-                                lvl = "WARNING" if unknown_streak[mac] >= 3 else "INFO"
-                                self.fire_alert(lvl,
-                                    f"UNKNOWN device: {mac} ({p.manufacturer}) "
-                                    f"Signal:{raw.get('signal','?')} dBm — streak:{unknown_streak[mac]}")
-
-                    # Linger check for unknown devices
-                    if not p.label:
-                        self._check_linger(mac, p.ssids, raw.get("signal"))
-
-            for mac in prev_present - current_macs:
-                p = self.devices.get(mac)
-                name = (p.label if p and p.label else mac)
-                self.fire_alert("INFO", f"DEPARTURE: {name} left")
-                unknown_streak.pop(mac, None)
-                self._linger_first_seen.pop(mac, None)
-                self._linger_alerted.discard(mac)
-
-            known = [self.devices[m].label for m in current_macs
-                     if m in self.devices and self.devices[m].label]
-            unk = sum(1 for m in current_macs
-                      if m not in self.devices or not self.devices[m].label)
-            status = f"[DOORBELL] Present: {', '.join(known) if known else '(none)'}"
-            if unk:
-                status += f" + {unk} unknown"
-            print(f"\r{_CYAN}{status}{_RESET}", end="", flush=True)
-
-            self.present_macs = current_macs
-            prev_present = set(current_macs)
-            self._save_whitelist()
-            time.sleep(interval)
-
-    # ═══════════════════════════════════════════
-    #  MODE 4: WATCHLIST
+    #  MODE 3: WATCHLIST
     # ═══════════════════════════════════════════
     def run_watchlist_mode(self):
         self.current_mode = "WATCHLIST"
-        watchlist = [p for p in self.devices.values()
-                     if p.is_watchlisted or p.group == "watchlist"]
+        watchlist = self.get_watchlist()
         if not watchlist:
-            self.fire_alert("INFO", "Watchlist empty. Use add_to_watchlist(mac, reason).")
+            self.fire_alert("INFO", "Watchlist empty.")
             return
         self.fire_alert("INFO", f"WATCHLIST mode — monitoring {len(watchlist)} devices")
         w_macs = {p.mac for p in watchlist}
-        found: set = set()
-        for db_path in self._get_kismet_files(hours=48):
-            for raw in self._parse_kismet_db(db_path):
-                if raw["mac"] in w_macs:
-                    found.add(raw["mac"])
-                    p = self.devices[raw["mac"]]
-                    msg = (f"WATCHLISTED: {p.display_name()} ({p.mac}) "
-                           f"Signal:{raw.get('signal','?')} dBm  Last:{p.last_seen[:19] if p.last_seen else '?'}")
-                    self.fire_alert("CRITICAL", msg)
-                    if self._notif:
-                        self._notif.notify_watchlist_hit(
-                            p.label, p.mac, raw.get("signal"), p.notes, self.config)
 
-        if HAS_RICH:
-            t = Table(title="👁  SentinelWatch — Watchlist", box=box.ROUNDED,
-                      header_style="bold red", border_style="red")
-            t.add_column("MAC"); t.add_column("Label"); t.add_column("Group")
-            t.add_column("Detected"); t.add_column("Last Seen"); t.add_column("Notes")
-            for p in watchlist:
-                det = "[red]YES ⚠[/red]" if p.mac in found else "[green]Not seen[/green]"
-                t.add_row(p.mac, p.label, p.group, det,
-                          p.last_seen[:19] if p.last_seen else "—", p.notes[:40])
-            console.print(t)
+        while not _push_alert.__globals__.get('_bg_stop_event').is_set():
+            for db_path in self._get_kismet_files(hours=1):
+                for raw in self._parse_kismet_db(db_path):
+                    if raw["mac"] in w_macs:
+                        p = self.devices[raw["mac"]]
+                        msg = f"WATCHLISTED: {p.display_name()} ({p.mac}) Signal:{raw.get('signal','?')} dBm"
+                        self.fire_alert("CRITICAL", msg)
+                        if self._notif:
+                            self._notif.notify_watchlist_hit(p.label, p.mac, raw.get("signal"), p.notes, self.config)
+            time.sleep(30)
+
 
     # ═══════════════════════════════════════════
     #  Utility
@@ -640,13 +580,13 @@ class TailDetector:
             self.fire_alert("INFO", f"Removed from watchlist: {mac}")
 
     def get_top_visitors(self, limit: int = 10):
-        home = [p for p in self.devices.values()
-                if "HOME" in p.modes_seen_in or p.home_encounters > 0]
-        return sorted(home, key=lambda p: p.encounter_score, reverse=True)[:limit]
+        stat = [p for p in self.devices.values()
+                if "STATIONARY" in p.modes_seen_in or p.home_encounters > 0]
+        return sorted(stat, key=lambda p: p.encounter_score, reverse=True)[:limit]
 
     def get_persons_of_interest(self, limit: int = 10):
         pois = [p for p in self.devices.values()
-                if "HOME" not in p.modes_seen_in and p.roam_encounters > 0]
+                if "STATIONARY" not in p.modes_seen_in and p.roam_encounters > 0]
         return sorted(pois, key=lambda p: p.encounter_score, reverse=True)[:limit]
 
     def get_watchlist(self):
@@ -678,6 +618,47 @@ class TailDetector:
             d["display_name"] = p.display_name()
             result.append(d)
         return result
+
+    def _get_mac_idle_time(self) -> float:
+        """Use ioreg to get macOS system idle time in seconds."""
+        try:
+            cmd = "ioreg -c IOHIDSystem | awk '/HIDIdleTime/ {print $NF/1000000000; exit}'"
+            out = subprocess.check_output(cmd, shell=True).decode().strip()
+            return float(out) if out else 0.0
+        except Exception:
+            return 0.0
+
+    def run_screensaver_mode(self, idle_threshold: int = 60):
+        """
+        Monitors system idle time. If idle > threshold, activate STATIONARY logic.
+        If user returns, stop scanning.
+        """
+        self.current_mode = "SCREENSAVER"
+        self.fire_alert("INFO", f"SCREENSAVER mode active (threshold: {idle_threshold}s)")
+        
+        is_scanning = False
+        
+        while not _push_alert.__globals__.get('_bg_stop_event').is_set():
+            idle = self._get_mac_idle_time()
+            
+            if idle >= idle_threshold:
+                if not is_scanning:
+                    self.fire_alert("WARNING", "Idle detected: Starting background Sentinel scan")
+                    is_scanning = True
+                
+                # Perform a single scan iteration (Stationary logic)
+                files = self._get_kismet_files(hours=1)
+                for db_path in files:
+                    for raw in self._parse_kismet_db(db_path):
+                        self._update_profile(raw, "STATIONARY")
+                
+                self.fire_alert("INFO", f"Screensaver scan complete. System still idle ({int(idle)}s)")
+            else:
+                if is_scanning:
+                    self.fire_alert("INFO", "User returned: Sentinel scan paused")
+                    is_scanning = False
+            
+            time.sleep(10)
 
 
 # ── CLI ───────────────────────────────────────

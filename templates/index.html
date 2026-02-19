@@ -5,6 +5,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>SentinelWatch</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <style>
     :root {
       --bg: #050508;
@@ -135,32 +139,15 @@
       box-shadow: 0 0 16px rgba(10, 132, 255, .4)
     }
 
-    .mode-btn.active-home {
-      background: var(--green);
-      border-color: var(--green);
+    .mode-btn.active {
+      background: var(--blue);
+      border-color: var(--blue);
       color: #fff;
-      box-shadow: 0 0 16px rgba(48, 209, 88, .4)
+      box-shadow: 0 0 16px rgba(10, 132, 255, .4)
     }
 
-    .mode-btn.active-roam {
-      background: var(--orange);
-      border-color: var(--orange);
-      color: #fff;
-      box-shadow: 0 0 16px rgba(255, 159, 10, .4)
-    }
 
-    .mode-btn.active-doorbell {
-      background: var(--teal);
-      border-color: var(--teal);
-      color: #fff
-    }
 
-    .mode-btn.active-watchlist {
-      background: var(--red);
-      border-color: var(--red);
-      color: #fff;
-      box-shadow: 0 0 16px rgba(255, 59, 48, .4)
-    }
 
     /* ─── LAYOUT ─── */
     .main {
@@ -619,7 +606,8 @@
       transition: background .3s
     }
 
-    .toggle.on {
+    .toggle.on,
+    .toggle.active {
       background: var(--green)
     }
 
@@ -736,6 +724,7 @@
 
 <body>
 
+
   <!-- NAV -->
   <nav>
     <div class="logo"><span class="logo-shield">🛡</span> SentinelWatch</div>
@@ -746,12 +735,25 @@
       <span id="unk-count">Unknown: <b>—</b></span>
     </div>
     <div class="mode-btns">
-      <button class="mode-btn" data-mode="HOME">🏠 Home</button>
-      <button class="mode-btn" data-mode="ROAM">🚗 Roam</button>
-      <button class="mode-btn" data-mode="DOORBELL">🔔 Doorbell</button>
+      <button class="mode-btn" data-mode="STATIONARY">🛡 Stationary</button>
+      <button class="mode-btn" data-mode="ROAMING">🚗 Roaming</button>
       <button class="mode-btn" data-mode="WATCHLIST">👁 Watchlist</button>
+      <button class="mode-btn" data-mode="SCREENSAVER">🖥 Screensaver</button>
     </div>
   </nav>
+
+  <!-- SUB-NAV / TOGGLES -->
+  <div
+    style="background:rgba(255,255,255,0.02);padding:10px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:20px;font-size:12px">
+    <div id="stationary-controls" style="display:none;align-items:center;gap:12px">
+      <span style="color:var(--muted)">Stationary features:</span>
+      <div class="notif-toggle" style="margin:0">
+        <div class="toggle" id="doorbell-toggle" onclick="toggleDoorbell()"></div>
+        <span>Live Arrival Alerts (Doorbell)</span>
+      </div>
+    </div>
+  </div>
+
 
   <!-- MAIN -->
   <div class="main">
@@ -784,6 +786,10 @@
         <div class="card-title">
           <span id="poi-title">🚗 Persons of Interest</span>
           <span class="badge badge-orange" id="poi-count">0</span>
+          <div style="margin-left:auto; display:flex; align-items:center; gap:10px">
+            <span style="font-size:11px; color:var(--muted)">Hide Known</span>
+            <div class="toggle" id="poi-filter-toggle" onclick="togglePOIFilter()"></div>
+          </div>
         </div>
         <div class="poi-list" id="poi-list"></div>
       </div>
@@ -859,6 +865,16 @@
           </div>
         </div>
       </div>
+
+      <!-- LIVE INTELLIGENCE MAP -->
+      <div class="glass card" style="height:400px;padding:0;overflow:hidden;position:relative;margin-top:16px">
+        <div id="intel-map" style="width:100%;height:100%;z-index:1"></div>
+        <div
+          style="position:absolute;top:10px;left:50px;z-index:1000;background:var(--bg);padding:4px 10px;border-radius:20px;font-size:10px;border:1px solid var(--border);color:var(--muted)">
+          🛰 LIVE INTELLIGENCE MAP
+        </div>
+      </div>
+
 
     </div>
 
@@ -1067,25 +1083,48 @@
         ks.innerHTML = d.kismet_connected
           ? '<span class="dot dot-green"></span>Kismet: ONLINE'
           : '<span class="dot dot-red"></span>Kismet: OFFLINE';
+
         document.querySelectorAll('.mode-btn').forEach(b => {
-          b.className = 'mode-btn' + (b.dataset.mode === d.mode ? ' active-' + d.mode.toLowerCase() : '');
+          b.className = 'mode-btn' + (b.dataset.mode === d.mode ? ' active' : '');
         });
+
+        // Show/Hide Stationary Controls
+        const stationaryControls = document.getElementById('stationary-controls');
+        if (stationaryControls) {
+          stationaryControls.style.display = (d.mode === 'STATIONARY') ? 'flex' : 'none';
+        }
+
       } catch (e) { }
     }
 
     // ─── POI / Top Visitors ───────────────────────
+    let hideKnownPOI = false;
+    function togglePOIFilter() {
+      hideKnownPOI = !hideKnownPOI;
+      document.getElementById('poi-filter-toggle').classList.toggle('on', hideKnownPOI);
+      refreshPOI();
+    }
+
     async function refreshPOI() {
-      const ep = (currentMode === 'HOME') ? '/api/top_visitors' : '/api/persons';
-      const key = (currentMode === 'HOME') ? 'visitors' : 'persons';
-      document.getElementById('poi-title').textContent = currentMode === 'HOME' ? '🏠 Top Visitors' : '🚗 Persons of Interest';
+      const ep = (currentMode === 'STATIONARY') ? '/api/top_visitors' : '/api/persons';
+      const key = (currentMode === 'STATIONARY') ? 'visitors' : 'persons';
+      document.getElementById('poi-title').textContent = currentMode === 'STATIONARY' ? '🏠 Top Visitors' : '🚗 Persons of Interest';
       try {
         const r = await fetch(ep); const d = await r.json();
-        const list = d[key] || [];
+        let list = d[key] || [];
+
+        if (hideKnownPOI) {
+          list = list.filter(p => !p.label || p.label.trim() === "");
+        }
+
         document.getElementById('poi-count').textContent = list.length;
         const el = document.getElementById('poi-list');
         el.innerHTML = list.slice(0, 10).map((p, i) => `
       <div class="poi-card" onclick="expandRow('${p.mac}')">
-        <div class="poi-rank">#${i + 1} &nbsp; Score: ${p.encounter_score.toFixed(2)}</div>
+        <div class="poi-rank">
+          #${i + 1} &nbsp; Score: ${p.encounter_score.toFixed(2)}
+          <button class="btn btn-sm" style="margin-left:10px;padding:2px 8px;font-size:10px;background:rgba(255,255,255,0.1)" onclick="event.stopPropagation();quickLabel('${p.mac}')">🏷 Name</button>
+        </div>
         <div class="poi-mac">${p.display_name || p.mac}</div>
         <div class="poi-meta">
           <span>${p.manufacturer || '?'}</span>
@@ -1128,9 +1167,12 @@
       <td><span style="font-size:10px">${(p.modes_seen_in || []).join(', ') || '—'}</span></td>
       <td style="color:var(--muted);font-size:11px">${p.last_seen ? p.last_seen.substr(0, 16) : '—'}</td>
       <td>
-        ${p.is_watchlisted
+        <div style="display:flex;gap:5px">
+          <button class="btn btn-sm" style="background:rgba(255,255,255,0.06);color:#fff" onclick="event.stopPropagation();quickLabel('${p.mac}')">🏷 Name</button>
+          ${p.is_watchlisted
           ? `<button class="btn btn-sm" style="background:rgba(255,255,255,.06);color:var(--muted)" onclick="event.stopPropagation();removeWatch('${p.mac}')">Unwatch</button>`
           : `<button class="btn btn-red btn-sm" onclick="event.stopPropagation();quickWatch('${p.mac}')">Watch</button>`}
+        </div>
       </td>
     </tr>
     <tr><td colspan="10" class="expand-panel" id="expand-${p.mac.replace(/:/g, '')}">
@@ -1173,6 +1215,7 @@
           <div style="flex:1"><div style="font-size:12px;font-weight:600">${p.label || p.mac}</div>
           <div class="mono" style="font-size:10px;color:var(--muted)">${p.mac}</div>
           <div style="font-size:10px;color:var(--muted)">${p.notes || ''}</div></div>
+          <button class="btn btn-sm" style="background:rgba(255,255,255,.06);color:#fff;margin-right:5px" onclick="quickLabel('${p.mac}')">🏷 Name</button>
           <button class="btn btn-sm" style="background:rgba(255,255,255,.06);color:var(--muted)" onclick="removeWatch('${p.mac}')">Remove</button>
         </div>`).join('')
           : '<div style="color:var(--muted);font-size:12px">Watchlist is empty.</div>';
@@ -1194,7 +1237,10 @@
             <div style="font-size:11px;color:var(--muted)">${p.manufacturer || '?'} &nbsp;|&nbsp; ${p.unique_location_count} locations &nbsp;|&nbsp; ${p.total_hits} hits</div>
             <div style="font-size:10px;color:var(--muted);margin-top:3px">${(p.locations_seen || []).slice(0, 4).map(l => l.label).join(' → ')}</div>
           </div>
-          <div class="mlt-score">${p.stalker_score.toFixed(1)}</div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <button class="btn btn-sm" style="background:rgba(255,255,255,0.06);color:#fff" onclick="quickLabel('${p.mac}')">🏷 Name</button>
+            <div class="mlt-score">${p.stalker_score.toFixed(1)}</div>
+          </div>
         </div>`).join('')
           : '<div style="color:var(--muted);font-size:12px">No multi-location suspects yet. Keep roaming to build data.</div>';
       } catch (e) { }
@@ -1254,6 +1300,17 @@
       refreshDevices(); refreshPOI();
     }
 
+    async function quickLabel(mac) {
+      const old = allDevices.find(d => d.mac === mac);
+      const name = prompt('Enter a nickname for this device:', old ? (old.label || '') : '');
+      if (name === null) return;
+      await fetch('/api/label', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mac, label: name, group: old ? old.group : 'unknown' })
+      });
+      refreshDevices(); refreshPOI(); refreshWatchlist(); refreshMLT();
+    }
+
     async function addWatch(mac, btn) {
       const row = btn.closest('td');
       const reason = row.querySelector('.watch-reason').value;
@@ -1286,13 +1343,29 @@
     document.querySelectorAll('.mode-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
         const mode = btn.dataset.mode;
+        const doorbell_toggle = document.getElementById('doorbell-toggle');
+        const doorbell_alerts = doorbell_toggle ? doorbell_toggle.classList.contains('on') : false;
         await fetch('/api/mode', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode })
+          body: JSON.stringify({ mode, doorbell_alerts })
         });
         refreshStatus(); refreshPOI();
       });
     });
+
+    async function toggleDoorbell() {
+      const toggle = document.getElementById('doorbell-toggle');
+      if (!toggle) return;
+      toggle.classList.toggle('on');
+      const currentModeEl = document.getElementById('current-mode');
+      const mode = currentModeEl ? currentModeEl.textContent : 'STATIONARY';
+      if (mode === 'STATIONARY') {
+        await fetch('/api/mode', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'STATIONARY', doorbell_alerts: toggle.classList.contains('on') })
+        });
+      }
+    }
 
     // Periodically update system stats
     async function updateSysStats() {
@@ -1318,6 +1391,15 @@
     // ─── Exports ─────────────────────────────────
     async function exportCSV() { await fetch('/api/export/csv'); alert('CSV exported to data/ folder'); }
     async function exportJSON() { await fetch('/api/export/json'); alert('JSON exported to data/ folder'); }
+    async function exportPDF() {
+      const btn = event.target;
+      btn.textContent = "Generating...";
+      const resp = await fetch('/api/export/pdf');
+      const data = await resp.json();
+      btn.textContent = "Intel PDF";
+      if (data.ok) alert(`Intelligence Report generated: ${data.file}`);
+      else alert(`Error: ${data.error}`);
+    }
 
     // ─── SSE stream ───────────────────────────────
     function connectSSE() {
@@ -1342,7 +1424,21 @@
     function trendClass(t) { return { approaching: 'up', receding: 'down', stable: 'stable' }[t] || 'stable'; }
     function groupBadge(g) { return { family: 'badge-green', friend: 'badge-green', neighbor: 'badge-gray', work: 'badge-gray', unknown: 'badge-orange', watchlist: 'badge-red', suspect: 'badge-red' }[g] || 'badge-gray'; }
 
-    // ─── Wizard ───────────────────────────────────
+    // ─── MAP LOGIC ──────────────────────────────
+    let map = L.map('intel-map', { zoomControl: false }).setView([39.9612, -82.9988], 13);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; CartoDB'
+    }).addTo(map);
+
+    function updateMap(lat, lon, label = "Checkpoint") {
+      map.setView([lat, lon], 15);
+      L.marker([lat, lon]).addTo(map)
+        .bindPopup(`<b style="color:#000">${label}</b>`)
+        .openPopup();
+    }
+
+    // ─── PIN GATE LOGIC ─────────────────────────
+
     function openWizard() { document.getElementById('wizard-modal').style.display = 'flex'; renderDots(); }
     function closeWizard() { document.getElementById('wizard-modal').style.display = 'none'; }
     function renderDots() {

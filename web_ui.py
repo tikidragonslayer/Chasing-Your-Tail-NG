@@ -8,8 +8,12 @@ import os
 import queue
 import threading
 import time
+import os
+import stat
+import json
 import platform
 import psutil
+from fpdf import FPDF
 from datetime import datetime
 from flask import Flask, jsonify, render_template, request, Response, stream_with_context
 from flask_cors import CORS
@@ -71,14 +75,16 @@ def _run_mode_background(mode: str):
     _bg_stop_event = threading.Event()
 
     def _target():
-        if mode == "HOME":
-            detector.run_home_mode()
-        elif mode == "ROAM":
-            detector.run_roam_mode(continuous=True)
-        elif mode == "DOORBELL":
-            detector.run_doorbell_mode()
+        if mode == "STATIONARY":
+            # Pass doorbell toggle from config or request context
+            db_enabled = detector.config.get("alerts", {}).get("known_device_arrival_notify", False)
+            detector.run_stationary_mode(doorbell_alerts=db_enabled)
+        elif mode == "ROAMING":
+            detector.run_roaming_mode(continuous=True)
         elif mode == "WATCHLIST":
             detector.run_watchlist_mode()
+        elif mode == "SCREENSAVER":
+            detector.run_screensaver_mode()
 
     _bg_thread = threading.Thread(target=_target, daemon=True, name=f"sw-{mode.lower()}")
     _bg_thread.start()
@@ -210,9 +216,23 @@ def api_watchlist_remove():
 def api_mode():
     data = request.get_json(force=True)
     mode = data.get("mode", "").upper()
-    valid = {"HOME", "ROAM", "DOORBELL", "WATCHLIST"}
+    
+    # Handle legacy mappings for safety
+    if mode == "HOME": mode = "STATIONARY"
+    if mode == "ROAM": mode = "ROAMING"
+    if mode == "DOORBELL":
+        # Doorbell is now STATIONARY with alerts ON
+        mode = "STATIONARY"
+        detector.config.setdefault("alerts", {})["known_device_arrival_notify"] = True
+    
+    valid = {"STATIONARY", "ROAMING", "WATCHLIST", "SCREENSAVER"}
     if mode not in valid:
         return jsonify({"error": f"mode must be one of {valid}"}), 400
+    
+    # Optional explicit toggle in request
+    if "doorbell_alerts" in data:
+        detector.config.setdefault("alerts", {})["known_device_arrival_notify"] = data["doorbell_alerts"]
+        
     _run_mode_background(mode)
     return jsonify({"ok": True, "mode": mode})
 
@@ -255,6 +275,50 @@ def api_export_json():
     detector.export_to_json(filename)
     return jsonify({"ok": True, "file": filename})
 
+
+@app.route("/api/export/pdf")
+def api_export_pdf():
+    """Generate a high-fidelity PDF Intelligence Report."""
+    try:
+        filename = f"data/Sentinel_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Helvetica", "B", 24)
+        pdf.set_text_color(10, 132, 255) # Blue
+        pdf.cell(0, 20, "SENTINELWATCH", ln=True, align="C")
+        pdf.set_font("Helvetica", "B", 14)
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(0, 10, "PRO INTEL SURVEILLANCE AUDIT", ln=True, align="C")
+        pdf.ln(10)
+        
+        # System Info
+        pdf.set_font("Helvetica", "B", 12)
+        pdf.set_text_color(0, 0, 0)
+        pdf.cell(0, 10, f"Report Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True)
+        pdf.cell(0, 10, f"Host Node: {platform.node()}", ln=True)
+        pdf.cell(0, 10, f"Total Devices Tracked: {len(detector.devices)}", ln=True)
+        pdf.ln(5)
+        
+        # Alerts Summary
+        pdf.set_fill_color(240, 240, 240)
+        pdf.cell(0, 10, "RECENT CRITICAL ALERTS", ln=True, fill=True)
+        pdf.set_font("Helvetica", "", 10)
+        alerts = [a for a in get_recent_alerts(50) if a["level"] == "CRITICAL"]
+        for a in alerts[:20]:
+            pdf.multi_cell(0, 8, f"[{a['time']}] {a['msg']}")
+        
+        # Stalker Ranking
+        pdf.ln(5)
+        pdf.set_font("Helvetica", "B", 12)
+        pdf.cell(0, 10, "TOP PERSONS OF INTEREST", ln=True, fill=True)
+        pdf.set_font("Helvetica", "", 10)
+        for p in detector.get_persons_of_interest(10):
+            pdf.cell(0, 8, f"Score: {p.encounter_score} | MAC: {p.mac} | Seen: {p.seen_count}x", ln=True)
+            
+        pdf.output(filename)
+        return jsonify({"ok": True, "file": filename})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # ─── SSE Stream ───────────────────────────────
 @app.route("/api/stream")
@@ -321,6 +385,7 @@ def api_add_checkpoint():
         from multi_location_tracker import MultiLocationTracker
         mlt = MultiLocationTracker(config_path=CONFIG_PATH)
         cp = mlt.add_checkpoint(float(lat), float(lon), label)
+        # Trigger map update on UI (via SSE soon)
         return jsonify({"ok": True, "checkpoint": cp.to_dict()})
     except Exception as e:
         return jsonify({"error": str(e)}), 500

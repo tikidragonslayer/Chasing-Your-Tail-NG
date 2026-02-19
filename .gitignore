@@ -1,0 +1,37 @@
+# Bytes and python compile files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+.env
+
+# Data and logs
+data/
+logs/
+*.log
+surveillance_reports/
+kml_files/
+reports/
+
+# Sensitive configuration and credentials
+config.json
+ignore_list.py
+ignore_list_ssid.py
+ignore_lists/
+secure_credentials/
+secure_credentials.py
+secure_database.py
+migrate_credentials.py
+*.json
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
