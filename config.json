@@ -2,26 +2,64 @@
   "paths": {
     "base_dir": ".",
     "log_dir": "logs",
-    "kismet_logs": "/home/matt/kismet_logs/*.kismet",
+    "kismet_logs": "/Users/mistergoodbond/*.kismet",
+    "whitelist": "data/home_whitelist.json",
+    "roam_log": "data/roam_sessions.json",
+    "alerts_log": "data/alerts.log",
     "ignore_lists": {
       "mac": "mac_list.py",
       "ssid": "ssid_list.py"
     }
   },
-  "timing": {
-    "check_interval": 60,
-    "list_update_interval": 5,
-    "time_windows": {
-      "recent": 5,
-      "medium": 10,
-      "old": 15,
-      "oldest": 20
-    }
+  "kismet_api": {
+    "base_url": "http://localhost:2501",
+    "username": "kismet",
+    "password": ""
   },
-  "search": {
-    "lat_min": 31.3,
-    "lat_max": 37.0,
-    "lon_min": -114.8,
-    "lon_max": -109.0
+  "timing": {
+    "check_interval": 30,
+    "doorbell_scan_interval": 10,
+    "roam_scan_interval": 15,
+    "list_update_interval": 5,
+    "unknown_ssid_linger_minutes": 5
+  },
+  "thresholds": {
+    "person_of_interest_min_encounters": 3,
+    "stalker_alert_encounters": 5,
+    "signal_approaching_threshold": -65,
+    "cross_mode_alert": true
+  },
+  "alerts": {
+    "console_alerts": true,
+    "log_alerts": true,
+    "resend": {
+      "enabled": false,
+      "api_key": "",
+      "from_email": "sentinelwatch@yourdomain.com",
+      "to_email": "",
+      "send_on": [
+        "CRITICAL",
+        "WARNING"
+      ]
+    },
+    "twilio": {
+      "enabled": false,
+      "account_sid": "",
+      "auth_token": "",
+      "from_number": "",
+      "to_number": "",
+      "send_on": [
+        "CRITICAL"
+      ]
+    },
+    "known_device_arrival_notify": true,
+    "unknown_ssid_linger_notify": true,
+    "watchlist_notify_all_channels": true
+  },
+  "gps": {
+    "lat_min": 40.4,
+    "lat_max": 40.8,
+    "lon_min": -84.6,
+    "lon_max": -84.2
   }
 }
